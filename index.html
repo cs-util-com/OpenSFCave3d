@@ -1,4 +1,4 @@
-<!-- User Stories & Requirements for the code below:
+<!-- (Do NOT remove this entire comment block at the top of the HTML file!)
 
 ### **1. Game Overview**
 
@@ -94,15 +94,14 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
 
 
-## General Requirements (Do not remove)
+## General Instructions (Do not remove!)
 
-1. Keep this comment block in the code.
-2. The font should be CONSOLAS, monospace.
-3. No backend; all data is stored locally.
-4. Simplify the code if possible (without removing the functionality described above). 
-You MUST keep all comments in the code below, even if you think they are redundant.
-Always respond with the full new html file (including these comments here), 
-additional explanations what you change are nice to have but not necessary. 
+1. Keep this comment block in the code! Also do not remove any comments in the code below.
+2. If any text is displayed, the font should be CONSOLAS, monospace.
+3. There is no backend; all data needs to be stored locally.
+4. Simplify the code if possible (without removing comments or the functionality described above). 
+5. You MUST keep all comments in the code below, even if you think they are redundant.
+6. Always respond with the full new html file (including these comments here), additional explanations are not necessary. 
 -->
 
 <!DOCTYPE html>
@@ -198,6 +197,11 @@ additional explanations what you change are nice to have but not necessary.
     const finalStatsDiv = document.getElementById("finalStats");
     const restartBtn = document.getElementById("restartBtn");
     
+    // ==== Tunnel Variables ====
+    let tunnel; // current tunnel mesh
+    let lastTunnelUpdateZ = 0;
+    const TUNNEL_UPDATE_THRESHOLD = 10; // update tunnel every 10 units
+    
     // ==== Scene Setup ====
     function createScene() {
       scene = new BABYLON.Scene(engine);
@@ -214,6 +218,9 @@ additional explanations what you change are nice to have but not necessary.
       let ground = BABYLON.MeshBuilder.CreateGround("ground", {width: 100, height: 100}, scene);
       ground.isVisible = false;
       
+      // Create initial tunnel walls based on player's starting position
+      updateTunnel();
+      
       // Pre-generate obstacles along z-axis
       generateObstacles();
       
@@ -221,6 +228,46 @@ additional explanations what you change are nice to have but not necessary.
       setupInputHandlers();
       
       return scene;
+    }
+    
+    // ==== Tunnel Update Function ====
+    // Recreates the tunnel mesh so that its walls reflect the current physical boundaries.
+    // The tunnel is generated relative to the player's current z and extends a fixed length ahead.
+    function updateTunnel() {
+      // Dispose of the old tunnel if it exists
+      if (tunnel) {
+        tunnel.dispose();
+      }
+      
+      let path = [];
+      let radii = [];
+      const tunnelLength = 1000; // tunnel extends 1000 units ahead of the player
+      let offset = player.position.z;
+      
+      // Generate path points (relative z) and compute radii using the absolute z (offset + relative)
+      for (let relZ = 0; relZ <= tunnelLength; relZ += 5) {
+        let absZ = offset + relZ;
+        let radius = Math.max(INITIAL_TUNNEL_RADIUS - absZ * NARROWING_RATE, MIN_TUNNEL_RADIUS);
+        path.push(new BABYLON.Vector3(0, 0, relZ));
+        radii.push(radius);
+      }
+      
+      // Create the tube mesh with inside faces visible (BACKSIDE)
+      tunnel = BABYLON.MeshBuilder.CreateTube("tunnel", {
+        path: path,
+        radii: radii,
+        tessellation: 32,
+        cap: BABYLON.Mesh.NO_CAP,
+        sideOrientation: BABYLON.Mesh.BACKSIDE
+      }, scene);
+      
+      tunnel.material = new BABYLON.StandardMaterial("tunnelMat", scene);
+      tunnel.material.diffuseColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+      tunnel.material.specularColor = new BABYLON.Color3(0, 0, 0);
+      
+      // Position the tunnel so its start aligns with the player's current z position.
+      tunnel.position.z = player.position.z;
+      lastTunnelUpdateZ = player.position.z;
     }
     
     // ==== Input Handling ====
@@ -277,7 +324,7 @@ additional explanations what you change are nice to have but not necessary.
     
     // ==== Collision Detection ====
     function checkCollision() {
-      // Check tunnel boundaries
+      // Check tunnel boundaries using the same formula as in updateTunnel()
       let currentTunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - player.position.z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
       let radialDist = Math.sqrt(player.position.x * player.position.x + player.position.y * player.position.y);
       if (radialDist > currentTunnelRadius) {
@@ -337,6 +384,11 @@ additional explanations what you change are nice to have but not necessary.
       // Check for collision
       if (checkCollision()) {
         gameOver();
+      }
+      
+      // Recreate the tunnel if the player has moved forward enough so that the visual tunnel remains in sync with the physical boundaries.
+      if (player.position.z - lastTunnelUpdateZ > TUNNEL_UPDATE_THRESHOLD) {
+        updateTunnel();
       }
     }
     
