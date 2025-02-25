@@ -1,6 +1,6 @@
 <!-- User Stories & Requirements for the code below:
 
-### **1\. Game Overview**
+### **1. Game Overview**
 
 * **Concept:** A 3D take on the classic sfcave game.  
 * **Perspective:** First-person view, with the plane represented as a single dot (hitbox).  
@@ -8,7 +8,7 @@
 
 ---
 
-### **2\. Core Gameplay Mechanics**
+### **2. Core Gameplay Mechanics**
 
 * **Movement:**  
   * **Vertical Control:** A tap (on mobile) or mouse click (on PC) provides an upward impulse. Gravity continuously pulls the dot downward.  
@@ -18,7 +18,7 @@
 
 ---
 
-### **3\. Tunnel and Obstacles**
+### **3. Tunnel and Obstacles**
 
 * **Tunnel:**  
   * **Procedural Generation:** Levels are generated based on a seed. The seed is displayed to the player for sharing and replay purposes.  
@@ -30,7 +30,7 @@
 
 ---
 
-### **4\. Collectible Power-Ups**
+### **4. Collectible Power-Ups**
 
 There are three types of time-limited power-ups, with durations that accumulate if the same type is collected while an effect is already active:
 
@@ -45,7 +45,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
 ---
 
-### **5\. Ghost Player Functionality**
+### **5. Ghost Player Functionality**
 
 * **Purpose:** Motivates players to compete against their own previous best runs.  
 * **Recording:** Only the player’s movement (position and timing) is recorded.  
@@ -53,14 +53,14 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
 ---
 
-### **6\. Level Seed Management**
+### **6. Level Seed Management**
 
 * **Visibility:** The seed is displayed on-screen, allowing players to copy and share it.  
 * **Usage:** Players can either reuse a seed to challenge their previous ghost runs or change the seed to generate a new level layout.
 
 ---
 
-### **7\. Scoring System**
+### **7. Scoring System**
 
 * **Base Score:** Continuously accumulates based on the distance traveled.  
 * **Bonuses:**  
@@ -70,7 +70,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
 ---
 
-### **8\. Game Over and Feedback**
+### **8. Game Over and Feedback**
 
 * **Trigger:** The game ends immediately when the player's dot collides with an obstacle or exits the tunnel.  
 * **Game Over Screen:** Upon game termination, display the following final statistics:  
@@ -83,7 +83,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
 ---
 
-### **9\. Control Methods for Different Platforms**
+### **9. Control Methods for Different Platforms**
 
 * **Mobile:**  
   * **Steering:** Left/right via sensor-based tilt.  
@@ -94,14 +94,12 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
 
 
-
-## General Requirements
+## General Requirements (Do not remove)
 
 1. Keep this comment block in the code.
 2. The font should be CONSOLAS, monospace.
 3. No backend; all data is stored locally.
-
-Simplify the code if possible (without removing the functionality described above). 
+4. Simplify the code if possible (without removing the functionality described above). 
 You MUST keep all comments in the code below, even if you think they are redundant.
 Always respond with the full new html file (including these comments here), 
 additional explanations what you change are nice to have but not necessary. 
@@ -119,7 +117,7 @@ additional explanations what you change are nice to have but not necessary.
       width: 100%;
       height: 100%;
       background: #000;
-      font-family: sans-serif;
+      font-family: Consolas, monospace;
       color: white;
     }
     #renderCanvas {
@@ -166,8 +164,9 @@ additional explanations what you change are nice to have but not necessary.
     let scene;
     
     // Game settings & tunable variables
-    const GRAVITY = -0.02;
-    const UP_IMPULSE = 0.5;
+    const GRAVITY = -0.002;
+    const UP_IMPULSE = 0.05;
+    // Adjusted FORWARD_SPEED from 0.2 to 0.1 to slow down the game speed.
     const FORWARD_SPEED = 0.2;
     const HORIZONTAL_SENSITIVITY = 0.005; // Mouse/touch horizontal sensitivity
     const INITIAL_TUNNEL_RADIUS = 5;
