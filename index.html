@@ -98,7 +98,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
 1. Keep this comment block in the code! Also do not remove any comments in the code below.
 2. If any text is displayed, the font should be CONSOLAS, monospace.
 3. There is no backend; all data needs to be stored locally.
-4. Simplify the code if possible (without removing comments or the functionality described above). 
+4. Simplify the code if possible (without removing comments or the functionality described above).
 5. You MUST keep all comments in the code below, even if you think they are redundant.
 6. Always respond with the full new html file (including these comments here), additional explanations are not necessary. 
 -->
@@ -141,8 +141,9 @@ There are three types of time-limited power-ups, with durations that accumulate 
       text-align: center;
     }
   </style>
-  <!-- Babylon.js from CDN -->
+  <!-- Include Babylon.js and Cannon.js (for physics) from CDN -->
   <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/cannon.js"></script>
 </head>
 <body>
   <canvas id="renderCanvas"></canvas>
@@ -155,106 +156,96 @@ There are three types of time-limited power-ups, with durations that accumulate 
     <div id="finalStats"></div>
     <button id="restartBtn">Restart</button>
   </div>
+
   <script>
     // ==== Global Variables ====
     let canvas = document.getElementById("renderCanvas");
     let engine = new BABYLON.Engine(canvas, true);
     let scene;
-    
-    // Game settings & tunable variables
-    const GRAVITY = -0.002;
-    const UP_IMPULSE = 0.05;
-    // Adjusted FORWARD_SPEED from 0.2 to 0.1 to slow down the game speed.
-    const FORWARD_SPEED = 0.2;
-    const HORIZONTAL_SENSITIVITY = 0.005; // Mouse/touch horizontal sensitivity
-    const INITIAL_TUNNEL_RADIUS = 5;
-    const NARROWING_RATE = 0.0005; // how quickly tunnel narrows per unit z
-    const MIN_TUNNEL_RADIUS = 2;
-    const OBSTACLE_INTERVAL = 10; // distance between obstacles
-    const OBSTACLE_SIZE = 0.5;
 
-    // We use a single long tunnel for the entire run to ensure
-    // the visual cave bounds match the collision bounds at all times.
+    // We will rely on Babylon's physics for all collisions now.
+    // So we do not need a separate manual boundary check.
+
+    // Game settings & tunable variables
+    const GRAVITY = -9.81;                 // Physics gravity (mimics real gravity)
+    const UP_IMPULSE = 6;                  // Adjusted upward impulse for physics
+    const FORWARD_SPEED = 3;               // Forward speed (units per second)
+    const HORIZONTAL_SENSITIVITY = 0.03;   // Horizontal sensitivity for mouse or tilt
+    const INITIAL_TUNNEL_RADIUS = 5;
+    const NARROWING_RATE = 0.0005;         // how quickly tunnel narrows per unit z
+    const MIN_TUNNEL_RADIUS = 2;
+    const OBSTACLE_INTERVAL = 10;          // distance between obstacles
+    const OBSTACLE_SIZE = 0.5;
     const TUNNEL_LENGTH = 10000; 
-    
-    // Player state
-    let player = {
-      position: new BABYLON.Vector3(0, 0, 0),
-      velocity: new BABYLON.Vector3(0, 0, FORWARD_SPEED)
-    };
-    
+
+    // Score & state
     let score = 0;
     let gameRunning = true;
-    let seed = 12345; // for now, fixed seed (can later be randomized/displayed)
-    
-    // Arrays for obstacles
-    let obstacles = [];
-    
+    let seed = 12345;
+
     // For ghost run recording (simplified)
     let ghostPositions = [];
-    
+
+    // Arrays for obstacles
+    let obstacles = [];
+
     // UI elements
     const scoreDisplay = document.getElementById("scoreDisplay");
     const seedDisplay = document.getElementById("seedDisplay");
     const gameOverDiv = document.getElementById("gameOver");
     const finalStatsDiv = document.getElementById("finalStats");
     const restartBtn = document.getElementById("restartBtn");
-    
-    // ==== Tunnel Variables ====
-    let tunnel; // current tunnel mesh
-    
-    // These remain but are no longer used for a threshold-based rebuild:
-    let lastTunnelUpdateZ = 0;
-    const TUNNEL_UPDATE_THRESHOLD = 10; // No longer used, but kept for reference.
-    
+
+    // References to key game objects
+    let tunnel;             // The visual + physical tunnel mesh
+    let playerMesh;         // The player's sphere mesh (physics impostor)
+
     // ==== Scene Setup ====
     function createScene() {
       scene = new BABYLON.Scene(engine);
-      
-      // Create a first-person camera attached to the player
-      let camera = new BABYLON.FreeCamera("camera", player.position.clone(), scene);
-      camera.attachControl(canvas, true);
-      camera.inertia = 0.0;  // Immediate reaction
-      
-      // Basic light
-      let light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
-      
-      // Create ground (not visible, just for reference)
-      let ground = BABYLON.MeshBuilder.CreateGround("ground", {width: 100, height: 100}, scene);
-      ground.isVisible = false;
-      
-      // Create the tunnel once
-      updateTunnel();
-      
-      // Generate all obstacles
+
+      // Enable physics (using CannonJSPlugin)
+      scene.enablePhysics(
+        new BABYLON.Vector3(0, GRAVITY, 0),
+        new BABYLON.CannonJSPlugin()
+      );
+
+      // Create a basic light
+      let light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
+
+      // 1) Create the tunnel first
+      createTunnel();
+
+      // 2) Create the player mesh next (so it's available when generating obstacles)
+      createPlayer();
+
+      // 3) Create all obstacles afterwards (so playerMesh is defined for collision registration)
       generateObstacles();
-      
-      // Register input handlers
+
+      // Create a camera and parent it to the player mesh so we get first-person view.
+      // We'll offset the camera slightly forward so it sits "inside" the sphere.
+      let camera = new BABYLON.UniversalCamera("camera", new BABYLON.Vector3(0, 0, 0), scene);
+      camera.attachControl(canvas, true);
+      camera.parent = playerMesh;
+      camera.position.z = 0;  // place camera at the center of the sphere
+
+      // Register input handlers (mouse, pointer, tilt)
       setupInputHandlers();
-      
+
       return scene;
     }
-    
-    // ==== Tunnel Update Function ====
-    // Creates a single long tunnel so that its visual boundary always matches
-    // the physical bounds used in collision checks.
-    function updateTunnel() {
-      // Dispose of the old tunnel if it exists
-      if (tunnel) {
-        tunnel.dispose();
-      }
-      
+
+    // ==== Create Tunnel ====
+    function createTunnel() {
+      // Build a path and corresponding radii from z=0 up to TUNNEL_LENGTH
       let path = [];
       let radii = [];
-      
-      // Generate path points from z=0 up to TUNNEL_LENGTH
       for (let z = 0; z <= TUNNEL_LENGTH; z += 5) {
         let radius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
         path.push(new BABYLON.Vector3(0, 0, z));
         radii.push(radius);
       }
-      
-      // Create the tube mesh with inside faces visible (BACKSIDE)
+
       tunnel = BABYLON.MeshBuilder.CreateTube("tunnel", {
         path: path,
         radii: radii,
@@ -262,154 +253,164 @@ There are three types of time-limited power-ups, with durations that accumulate 
         cap: BABYLON.Mesh.NO_CAP,
         sideOrientation: BABYLON.Mesh.BACKSIDE
       }, scene);
-      
+
       tunnel.material = new BABYLON.StandardMaterial("tunnelMat", scene);
       tunnel.material.diffuseColor = new BABYLON.Color3(0.2, 0.2, 0.2);
       tunnel.material.specularColor = new BABYLON.Color3(0, 0, 0);
-      
-      // Position the tunnel so it starts at z=0 in world space
-      tunnel.position.z = 0;
-      lastTunnelUpdateZ = 0; // Keeping this for reference, though it's no longer used
+
+      // Create a physics impostor so the tunnel is collidable from the inside.
+      // mass = 0 => static object.
+      tunnel.physicsImpostor = new BABYLON.PhysicsImpostor(
+        tunnel,
+        BABYLON.PhysicsImpostor.MeshImpostor,
+        { mass: 0, friction: 0.2, restitution: 0 },
+        scene
+      );
     }
-    
-    // ==== Input Handling ====
-    function setupInputHandlers() {
-      // Upward impulse on pointer down (tap/click)
-      canvas.addEventListener("pointerdown", function(e) {
-        if (!gameRunning) return;
-        player.velocity.y = UP_IMPULSE;
-      });
-      
-      // Mouse move for horizontal control (PC testing)
-      canvas.addEventListener("pointermove", function(e) {
-        if (!gameRunning) return;
-        // Map pointer movement to horizontal adjustment
-        player.position.x += e.movementX * HORIZONTAL_SENSITIVITY;
-      });
-      
-      // Optional: sensor based input (mobile)
-      if (window.DeviceOrientationEvent) {
-        window.addEventListener("deviceorientation", function(e) {
-          if (!gameRunning) return;
-          // Using gamma (left/right tilt) to adjust player's x
-          if (e.gamma !== null) {
-            // Normalize gamma to a value between -1 and 1 (approx)
-            let tilt = BABYLON.Scalar.Clamp(e.gamma / 45, -1, 1);
-            player.position.x += tilt * HORIZONTAL_SENSITIVITY * 5;
-          }
-        });
-      }
+
+    // ==== Create Player ====
+    function createPlayer() {
+      // A small sphere representing the player's "dot"
+      playerMesh = BABYLON.MeshBuilder.CreateSphere("playerMesh", { diameter: 0.5 }, scene);
+      playerMesh.position = new BABYLON.Vector3(0, 0, 0);
+
+      // Make it a dynamic physics body
+      playerMesh.physicsImpostor = new BABYLON.PhysicsImpostor(
+        playerMesh,
+        BABYLON.PhysicsImpostor.SphereImpostor,
+        { mass: 1, friction: 0.0, restitution: 0 },
+        scene
+      );
+
+      // We set an initial forward velocity to keep moving through the tunnel.
+      // Then each frame we'll keep forcing the forward speed to remain constant.
+      playerMesh.physicsImpostor.setLinearVelocity(new BABYLON.Vector3(0, 0, FORWARD_SPEED));
+
+      // For aesthetics, the player sphere can be invisible or tinted.
+      let pmat = new BABYLON.StandardMaterial("playerMat", scene);
+      pmat.diffuseColor = new BABYLON.Color3(0, 0.5, 1);
+      playerMesh.material = pmat;
     }
-    
+
     // ==== Obstacle Generation ====
     function generateObstacles() {
       obstacles = [];
-      // Generate obstacles up to TUNNEL_LENGTH
       for (let z = OBSTACLE_INTERVAL; z < TUNNEL_LENGTH; z += OBSTACLE_INTERVAL) {
-        // Determine tunnel radius at this z
         let tunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
-        // Place obstacle randomly within tunnel boundaries (but not too close to walls)
         let angle = Math.random() * Math.PI * 2;
         let radius = Math.random() * (tunnelRadius - OBSTACLE_SIZE - 0.5);
         let x = Math.cos(angle) * radius;
         let y = Math.sin(angle) * radius;
-        
-        let obstacleMesh = BABYLON.MeshBuilder.CreateBox("obstacle" + z, {size: OBSTACLE_SIZE}, scene);
+
+        let obstacleMesh = BABYLON.MeshBuilder.CreateBox("obstacle" + z, { size: OBSTACLE_SIZE }, scene);
         obstacleMesh.position = new BABYLON.Vector3(x, y, z);
         obstacleMesh.material = new BABYLON.StandardMaterial("obsMat" + z, scene);
         obstacleMesh.material.diffuseColor = new BABYLON.Color3(Math.random(), Math.random(), Math.random());
-        
+
+        // Create a static physics impostor for each obstacle so it can collide with the player.
+        obstacleMesh.physicsImpostor = new BABYLON.PhysicsImpostor(
+          obstacleMesh,
+          BABYLON.PhysicsImpostor.BoxImpostor,
+          { mass: 0, friction: 0.2, restitution: 0 },
+          scene
+        );
+
+        // Register a collision event: if the player hits an obstacle => game over.
+        playerMesh.physicsImpostor.registerOnPhysicsCollide(
+          obstacleMesh.physicsImpostor,
+          function(main, collided) {
+            if (gameRunning) {
+              gameOver();
+            }
+          }
+        );
         obstacles.push(obstacleMesh);
       }
     }
-    
-    // ==== Collision Detection ====
-    function checkCollision() {
-      // Check tunnel boundaries at player's absolute z
-      let currentZ = player.position.z;
-      if (currentZ < 0 || currentZ > TUNNEL_LENGTH) {
-        // If outside the defined tunnel length, treat it as out of bounds
-        return true;
-      }
-      
-      // Physical radius from the same formula used to generate the tunnel
-      let currentTunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - currentZ * NARROWING_RATE, MIN_TUNNEL_RADIUS);
-      let radialDist = Math.sqrt(player.position.x * player.position.x + player.position.y * player.position.y);
-      if (radialDist > currentTunnelRadius) {
-        return true;
-      }
-      
-      // Check obstacles collisions
-      for (let i = 0; i < obstacles.length; i++) {
-        let obs = obstacles[i];
-        if (!obs) continue;
-        // Only check obstacles near the player in z
-        if (Math.abs(player.position.z - obs.position.z) < 1) {
-          let dist = BABYLON.Vector3.Distance(player.position, obs.position);
-          if (dist < OBSTACLE_SIZE) {
-            return true;
+
+    // ==== Input Handling ====
+    function setupInputHandlers() {
+      // On pointer down (tap/click) => upward impulse.
+      canvas.addEventListener("pointerdown", function() {
+        if (!gameRunning) return;
+        let currentVel = playerMesh.physicsImpostor.getLinearVelocity();
+        currentVel.y = UP_IMPULSE;
+        playerMesh.physicsImpostor.setLinearVelocity(currentVel);
+      });
+
+      // Mouse move for horizontal control on PC (pointermove)
+      canvas.addEventListener("pointermove", function(e) {
+        if (!gameRunning) return;
+        let currentVel = playerMesh.physicsImpostor.getLinearVelocity();
+        currentVel.x += e.movementX * HORIZONTAL_SENSITIVITY;
+        playerMesh.physicsImpostor.setLinearVelocity(currentVel);
+      });
+
+      // Sensor-based input on mobile (device orientation)
+      if (window.DeviceOrientationEvent) {
+        window.addEventListener("deviceorientation", function(e) {
+          if (!gameRunning) return;
+          if (e.gamma !== null) {
+            let tilt = BABYLON.Scalar.Clamp(e.gamma / 45, -1, 1);
+            let currentVel = playerMesh.physicsImpostor.getLinearVelocity();
+            currentVel.x += tilt * HORIZONTAL_SENSITIVITY * 1.5;
+            playerMesh.physicsImpostor.setLinearVelocity(currentVel);
           }
-        }
+        });
       }
-      return false;
     }
-    
-    // ==== Game Over Handling ====
+
+    // ==== Main Update Loop ====
+    function updateGame() {
+      if (!gameRunning) return;
+
+      // Record ghost position (for future ghost run overlay)
+      ghostPositions.push(playerMesh.position.clone());
+
+      // Force consistent forward speed along Z.
+      let currentVel = playerMesh.physicsImpostor.getLinearVelocity();
+      currentVel.z = FORWARD_SPEED;
+      playerMesh.physicsImpostor.setLinearVelocity(currentVel);
+
+      // Update score based on how far along Z the player has traveled.
+      score = playerMesh.position.z * 10;
+      scoreDisplay.innerText = "Score: " + Math.floor(score);
+
+      // If somehow the player escapes beyond the tunnel length, treat it as out of bounds => game over.
+      if (playerMesh.position.z > TUNNEL_LENGTH) {
+        gameOver();
+      }
+    }
+
+    // ==== Game Over ====
     function gameOver() {
       gameRunning = false;
-      // Stop the render loop
       engine.stopRenderLoop();
-      
-      // Display game over UI with final stats
       finalStatsDiv.innerHTML = `
         <p>Final Score: ${Math.floor(score)}</p>
-        <p>Distance: ${player.position.z.toFixed(2)}</p>
+        <p>Distance: ${playerMesh.position.z.toFixed(2)}</p>
         <p>Obstacles: ${obstacles.length}</p>
         <p>Seed: ${seed}</p>
       `;
       gameOverDiv.style.display = "block";
     }
-    
-    // ==== Main Game Loop ====
-    function updateGame() {
-      if (!gameRunning) return;
-      
-      // Record ghost position (for future ghost run overlay)
-      ghostPositions.push(player.position.clone());
-      
-      // Apply gravity to vertical velocity
-      player.velocity.y += GRAVITY;
-      
-      // Update player position
-      player.position.addInPlace(player.velocity);
-      
-      // Move camera to player's position (first-person view)
-      scene.activeCamera.position.copyFrom(player.position);
-      
-      // Increase score based on distance traveled
-      score = player.position.z * 10;
-      scoreDisplay.innerText = "Score: " + Math.floor(score);
-      
-      // Check for collision
-      if (checkCollision()) {
-        gameOver();
-      }
-      // We no longer do threshold-based tunnel updates. The large tunnel handles it.
-    }
-    
-    // ==== Render Loop and Scene Setup ====
+
+    // ==== Create and Run Scene ====
     let sceneToRender = createScene();
-    sceneToRender.registerBeforeRender(updateGame);
-    engine.runRenderLoop(function () {
-      if (scene) scene.render();
+    scene.registerBeforeRender(updateGame);
+
+    engine.runRenderLoop(function() {
+      if (scene) {
+        scene.render();
+      }
     });
-    
-    // Resize event
-    window.addEventListener("resize", function () {
+
+    // Handle resizing
+    window.addEventListener("resize", function() {
       engine.resize();
     });
-    
-    // Restart game functionality
+
+    // Restart button just reloads the page for simplicity
     restartBtn.addEventListener("click", function() {
       location.reload();
     });
