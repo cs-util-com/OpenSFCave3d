@@ -93,7 +93,6 @@ There are three types of time-limited power-ups, with durations that accumulate 
   * **Vertical Movement:** Mouse click for upward impulse.
 
 
-
 ## General Instructions (Do not remove!)
 
 1. Keep this comment block in the code! Also do not remove any comments in the code below.
@@ -173,6 +172,10 @@ There are three types of time-limited power-ups, with durations that accumulate 
     const MIN_TUNNEL_RADIUS = 2;
     const OBSTACLE_INTERVAL = 10; // distance between obstacles
     const OBSTACLE_SIZE = 0.5;
+
+    // We use a single long tunnel for the entire run to ensure
+    // the visual cave bounds match the collision bounds at all times.
+    const TUNNEL_LENGTH = 10000; 
     
     // Player state
     let player = {
@@ -199,8 +202,10 @@ There are three types of time-limited power-ups, with durations that accumulate 
     
     // ==== Tunnel Variables ====
     let tunnel; // current tunnel mesh
+    
+    // These remain but are no longer used for a threshold-based rebuild:
     let lastTunnelUpdateZ = 0;
-    const TUNNEL_UPDATE_THRESHOLD = 10; // update tunnel every 10 units
+    const TUNNEL_UPDATE_THRESHOLD = 10; // No longer used, but kept for reference.
     
     // ==== Scene Setup ====
     function createScene() {
@@ -218,10 +223,10 @@ There are three types of time-limited power-ups, with durations that accumulate 
       let ground = BABYLON.MeshBuilder.CreateGround("ground", {width: 100, height: 100}, scene);
       ground.isVisible = false;
       
-      // Create initial tunnel walls based on player's starting position
+      // Create the tunnel once
       updateTunnel();
       
-      // Pre-generate obstacles along z-axis
+      // Generate all obstacles
       generateObstacles();
       
       // Register input handlers
@@ -231,8 +236,8 @@ There are three types of time-limited power-ups, with durations that accumulate 
     }
     
     // ==== Tunnel Update Function ====
-    // Recreates the tunnel mesh so that its walls reflect the current physical boundaries.
-    // The tunnel is generated relative to the player's current z and extends a fixed length ahead.
+    // Creates a single long tunnel so that its visual boundary always matches
+    // the physical bounds used in collision checks.
     function updateTunnel() {
       // Dispose of the old tunnel if it exists
       if (tunnel) {
@@ -241,14 +246,11 @@ There are three types of time-limited power-ups, with durations that accumulate 
       
       let path = [];
       let radii = [];
-      const tunnelLength = 1000; // tunnel extends 1000 units ahead of the player
-      let offset = player.position.z;
       
-      // Generate path points (relative z) and compute radii using the absolute z (offset + relative)
-      for (let relZ = 0; relZ <= tunnelLength; relZ += 5) {
-        let absZ = offset + relZ;
-        let radius = Math.max(INITIAL_TUNNEL_RADIUS - absZ * NARROWING_RATE, MIN_TUNNEL_RADIUS);
-        path.push(new BABYLON.Vector3(0, 0, relZ));
+      // Generate path points from z=0 up to TUNNEL_LENGTH
+      for (let z = 0; z <= TUNNEL_LENGTH; z += 5) {
+        let radius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
+        path.push(new BABYLON.Vector3(0, 0, z));
         radii.push(radius);
       }
       
@@ -265,9 +267,9 @@ There are three types of time-limited power-ups, with durations that accumulate 
       tunnel.material.diffuseColor = new BABYLON.Color3(0.2, 0.2, 0.2);
       tunnel.material.specularColor = new BABYLON.Color3(0, 0, 0);
       
-      // Position the tunnel so its start aligns with the player's current z position.
-      tunnel.position.z = player.position.z;
-      lastTunnelUpdateZ = player.position.z;
+      // Position the tunnel so it starts at z=0 in world space
+      tunnel.position.z = 0;
+      lastTunnelUpdateZ = 0; // Keeping this for reference, though it's no longer used
     }
     
     // ==== Input Handling ====
@@ -281,8 +283,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // Mouse move for horizontal control (PC testing)
       canvas.addEventListener("pointermove", function(e) {
         if (!gameRunning) return;
-        // Map pointer movement to horizontal adjustment.
-        // e.movementX gives change in x; adjust player's x position directly.
+        // Map pointer movement to horizontal adjustment
         player.position.x += e.movementX * HORIZONTAL_SENSITIVITY;
       });
       
@@ -290,7 +291,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       if (window.DeviceOrientationEvent) {
         window.addEventListener("deviceorientation", function(e) {
           if (!gameRunning) return;
-          // Using gamma (left/right tilt) to adjust player's x.
+          // Using gamma (left/right tilt) to adjust player's x
           if (e.gamma !== null) {
             // Normalize gamma to a value between -1 and 1 (approx)
             let tilt = BABYLON.Scalar.Clamp(e.gamma / 45, -1, 1);
@@ -303,8 +304,8 @@ There are three types of time-limited power-ups, with durations that accumulate 
     // ==== Obstacle Generation ====
     function generateObstacles() {
       obstacles = [];
-      // Generate obstacles for a range of z values (e.g., up to z=1000)
-      for (let z = OBSTACLE_INTERVAL; z < 1000; z += OBSTACLE_INTERVAL) {
+      // Generate obstacles up to TUNNEL_LENGTH
+      for (let z = OBSTACLE_INTERVAL; z < TUNNEL_LENGTH; z += OBSTACLE_INTERVAL) {
         // Determine tunnel radius at this z
         let tunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
         // Place obstacle randomly within tunnel boundaries (but not too close to walls)
@@ -324,17 +325,25 @@ There are three types of time-limited power-ups, with durations that accumulate 
     
     // ==== Collision Detection ====
     function checkCollision() {
-      // Check tunnel boundaries using the same formula as in updateTunnel()
-      let currentTunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - player.position.z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
+      // Check tunnel boundaries at player's absolute z
+      let currentZ = player.position.z;
+      if (currentZ < 0 || currentZ > TUNNEL_LENGTH) {
+        // If outside the defined tunnel length, treat it as out of bounds
+        return true;
+      }
+      
+      // Physical radius from the same formula used to generate the tunnel
+      let currentTunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - currentZ * NARROWING_RATE, MIN_TUNNEL_RADIUS);
       let radialDist = Math.sqrt(player.position.x * player.position.x + player.position.y * player.position.y);
       if (radialDist > currentTunnelRadius) {
         return true;
       }
+      
       // Check obstacles collisions
       for (let i = 0; i < obstacles.length; i++) {
         let obs = obstacles[i];
         if (!obs) continue;
-        // Only check obstacles close to the player in z
+        // Only check obstacles near the player in z
         if (Math.abs(player.position.z - obs.position.z) < 1) {
           let dist = BABYLON.Vector3.Distance(player.position, obs.position);
           if (dist < OBSTACLE_SIZE) {
@@ -385,11 +394,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       if (checkCollision()) {
         gameOver();
       }
-      
-      // Recreate the tunnel if the player has moved forward enough so that the visual tunnel remains in sync with the physical boundaries.
-      if (player.position.z - lastTunnelUpdateZ > TUNNEL_UPDATE_THRESHOLD) {
-        updateTunnel();
-      }
+      // We no longer do threshold-based tunnel updates. The large tunnel handles it.
     }
     
     // ==== Render Loop and Scene Setup ====
