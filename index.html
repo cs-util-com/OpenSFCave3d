@@ -1,13 +1,106 @@
 <!-- User Stories & Requirements for the code below:
 
-- This is a template for a single-page HTML web app.
-- The font should be CONSOLAS, monospace.
-- No backend; all data is stored locally.
+### **1\. Game Overview**
 
-Main user stories:
-- ...
+* **Concept:** A 3D take on the classic sfcave game.  
+* **Perspective:** First-person view, with the plane represented as a single dot (hitbox).  
+* **Core Challenge:** Navigate a procedurally generated tunnel that narrows over time while avoiding obstacles.
 
-Keep this comment block in the code.
+---
+
+### **2\. Core Gameplay Mechanics**
+
+* **Movement:**  
+  * **Vertical Control:** A tap (on mobile) or mouse click (on PC) provides an upward impulse. Gravity continuously pulls the dot downward.  
+  * **Horizontal Control:** Sensor-based input on mobile (via tilt) and mouse movement on PC allow the player to steer left and right.  
+* **Collision & Life:**  
+  * The player has 1HP. Colliding with any obstacle or leaving the tunnel results in an immediate game over.
+
+---
+
+### **3\. Tunnel and Obstacles**
+
+* **Tunnel:**  
+  * **Procedural Generation:** Levels are generated based on a seed. The seed is displayed to the player for sharing and replay purposes.  
+  * **Dynamic Difficulty:** As the player progresses, the tunnel gradually narrows, increasing the challenge.  
+* **Obstacles:**  
+  * Static and brightly colored obstacles are positioned throughout the tunnel.  
+  * They are meant to be easily recognizable hazards that the player must avoid.  
+  * Obstacle density remains constant regardless of tunnel narrowing.
+
+---
+
+### **4\. Collectible Power-Ups**
+
+There are three types of time-limited power-ups, with durations that accumulate if the same type is collected while an effect is already active:
+
+* **Slow-Motion Effect:**  
+  * Temporarily slows down time (affecting overall gameplay speed).  
+* **Score Boost:**  
+  * Increases bonus points received (e.g., multiplier for distance or actions) while active.  
+* **Auto-Firing Weapon:**  
+  * **Behavior:** Automatically fires projectiles every 1 second.  
+  * **Direction:** Projectiles are shot in the direction the dot is currently steering (incorporating both vertical and horizontal movement).  
+  * **Impact:** When a projectile hits an obstacle, the obstacle is immediately destroyed and bonus points are awarded.
+
+---
+
+### **5\. Ghost Player Functionality**
+
+* **Purpose:** Motivates players to compete against their own previous best runs.  
+* **Recording:** Only the player’s movement (position and timing) is recorded.  
+* **Usage:** Ghost runs are available when playing with the same seed.
+
+---
+
+### **6\. Level Seed Management**
+
+* **Visibility:** The seed is displayed on-screen, allowing players to copy and share it.  
+* **Usage:** Players can either reuse a seed to challenge their previous ghost runs or change the seed to generate a new level layout.
+
+---
+
+### **7\. Scoring System**
+
+* **Base Score:** Continuously accumulates based on the distance traveled.  
+* **Bonuses:**  
+  * Additional bonus points are awarded for every obstacle destroyed by the auto-firing weapon.  
+  * Additional bonus points are given for each power-up collected.  
+* **Tuning:** Specific bonus values are tunable and can be adjusted during playtesting.
+
+---
+
+### **8\. Game Over and Feedback**
+
+* **Trigger:** The game ends immediately when the player's dot collides with an obstacle or exits the tunnel.  
+* **Game Over Screen:** Upon game termination, display the following final statistics:  
+  * Final Score  
+  * Distance Traveled  
+  * Number of Obstacles Destroyed  
+  * Number of Power-Ups Collected  
+  * The Seed used for that run  
+* **Feedback:** Appropriate visual and audio cues (e.g., sound effects or screen shake) may be included to enhance the impact of game over.
+
+---
+
+### **9\. Control Methods for Different Platforms**
+
+* **Mobile:**  
+  * **Steering:** Left/right via sensor-based tilt.  
+  * **Vertical Movement:** Tap for upward impulse.  
+* **PC (Testing):**  
+  * **Steering:** Mouse movement or keyboard (if desired) for left/right.  
+  * **Vertical Movement:** Mouse click for upward impulse.
+
+
+
+
+## General Requirements
+
+1. Keep this comment block in the code.
+2. The font should be CONSOLAS, monospace.
+3. No backend; all data is stored locally.
+
 Simplify the code if possible (without removing the functionality described above). 
 You MUST keep all comments in the code below, even if you think they are redundant.
 Always respond with the full new html file (including these comments here), 
@@ -17,35 +110,253 @@ additional explanations what you change are nice to have but not necessary.
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>TemplateJs</title>
-
-  <!-- Material Icons -->
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
-
+  <meta charset="UTF-8">
+  <title>Open 3D SFCave</title>
   <style>
-    /* GLOBAL */
     html, body {
       margin: 0;
-      padding: 0;
-      font-family: CONSOLAS, monospace;
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      font-family: sans-serif;
+      color: white;
+    }
+    #renderCanvas {
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    #uiOverlay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+    }
+    #gameOver {
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 20px;
+      border: 2px solid white;
+      display: none;
+      text-align: center;
     }
   </style>
+  <!-- Babylon.js from CDN -->
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
 </head>
 <body>
-
-<div class="top-panel">
-  <div class="title">Template Web App</div>
-</div>
-
-<svg id="graph"></svg>
-
-<script>
-  (function main() {
-    console.log("Template Web App initialized.");
-  })();
-</script>
-
+  <canvas id="renderCanvas"></canvas>
+  <div id="uiOverlay">
+    <div id="scoreDisplay">Score: 0</div>
+    <div id="seedDisplay">Seed: 12345</div>
+  </div>
+  <div id="gameOver">
+    <h1>Game Over</h1>
+    <div id="finalStats"></div>
+    <button id="restartBtn">Restart</button>
+  </div>
+  <script>
+    // ==== Global Variables ====
+    let canvas = document.getElementById("renderCanvas");
+    let engine = new BABYLON.Engine(canvas, true);
+    let scene;
+    
+    // Game settings & tunable variables
+    const GRAVITY = -0.02;
+    const UP_IMPULSE = 0.5;
+    const FORWARD_SPEED = 0.2;
+    const HORIZONTAL_SENSITIVITY = 0.005; // Mouse/touch horizontal sensitivity
+    const INITIAL_TUNNEL_RADIUS = 5;
+    const NARROWING_RATE = 0.0005; // how quickly tunnel narrows per unit z
+    const MIN_TUNNEL_RADIUS = 2;
+    const OBSTACLE_INTERVAL = 10; // distance between obstacles
+    const OBSTACLE_SIZE = 0.5;
+    
+    // Player state
+    let player = {
+      position: new BABYLON.Vector3(0, 0, 0),
+      velocity: new BABYLON.Vector3(0, 0, FORWARD_SPEED)
+    };
+    
+    let score = 0;
+    let gameRunning = true;
+    let seed = 12345; // for now, fixed seed (can later be randomized/displayed)
+    
+    // Arrays for obstacles
+    let obstacles = [];
+    
+    // For ghost run recording (simplified)
+    let ghostPositions = [];
+    
+    // UI elements
+    const scoreDisplay = document.getElementById("scoreDisplay");
+    const seedDisplay = document.getElementById("seedDisplay");
+    const gameOverDiv = document.getElementById("gameOver");
+    const finalStatsDiv = document.getElementById("finalStats");
+    const restartBtn = document.getElementById("restartBtn");
+    
+    // ==== Scene Setup ====
+    function createScene() {
+      scene = new BABYLON.Scene(engine);
+      
+      // Create a first-person camera attached to the player
+      let camera = new BABYLON.FreeCamera("camera", player.position.clone(), scene);
+      camera.attachControl(canvas, true);
+      camera.inertia = 0.0;  // Immediate reaction
+      
+      // Basic light
+      let light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+      
+      // Create ground (not visible, just for reference)
+      let ground = BABYLON.MeshBuilder.CreateGround("ground", {width: 100, height: 100}, scene);
+      ground.isVisible = false;
+      
+      // Pre-generate obstacles along z-axis
+      generateObstacles();
+      
+      // Register input handlers
+      setupInputHandlers();
+      
+      return scene;
+    }
+    
+    // ==== Input Handling ====
+    function setupInputHandlers() {
+      // Upward impulse on pointer down (tap/click)
+      canvas.addEventListener("pointerdown", function(e) {
+        if (!gameRunning) return;
+        player.velocity.y = UP_IMPULSE;
+      });
+      
+      // Mouse move for horizontal control (PC testing)
+      canvas.addEventListener("pointermove", function(e) {
+        if (!gameRunning) return;
+        // Map pointer movement to horizontal adjustment.
+        // e.movementX gives change in x; adjust player's x position directly.
+        player.position.x += e.movementX * HORIZONTAL_SENSITIVITY;
+      });
+      
+      // Optional: sensor based input (mobile)
+      if (window.DeviceOrientationEvent) {
+        window.addEventListener("deviceorientation", function(e) {
+          if (!gameRunning) return;
+          // Using gamma (left/right tilt) to adjust player's x.
+          if (e.gamma !== null) {
+            // Normalize gamma to a value between -1 and 1 (approx)
+            let tilt = BABYLON.Scalar.Clamp(e.gamma / 45, -1, 1);
+            player.position.x += tilt * HORIZONTAL_SENSITIVITY * 5;
+          }
+        });
+      }
+    }
+    
+    // ==== Obstacle Generation ====
+    function generateObstacles() {
+      obstacles = [];
+      // Generate obstacles for a range of z values (e.g., up to z=1000)
+      for (let z = OBSTACLE_INTERVAL; z < 1000; z += OBSTACLE_INTERVAL) {
+        // Determine tunnel radius at this z
+        let tunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
+        // Place obstacle randomly within tunnel boundaries (but not too close to walls)
+        let angle = Math.random() * Math.PI * 2;
+        let radius = Math.random() * (tunnelRadius - OBSTACLE_SIZE - 0.5);
+        let x = Math.cos(angle) * radius;
+        let y = Math.sin(angle) * radius;
+        
+        let obstacleMesh = BABYLON.MeshBuilder.CreateBox("obstacle" + z, {size: OBSTACLE_SIZE}, scene);
+        obstacleMesh.position = new BABYLON.Vector3(x, y, z);
+        obstacleMesh.material = new BABYLON.StandardMaterial("obsMat" + z, scene);
+        obstacleMesh.material.diffuseColor = new BABYLON.Color3(Math.random(), Math.random(), Math.random());
+        
+        obstacles.push(obstacleMesh);
+      }
+    }
+    
+    // ==== Collision Detection ====
+    function checkCollision() {
+      // Check tunnel boundaries
+      let currentTunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - player.position.z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
+      let radialDist = Math.sqrt(player.position.x * player.position.x + player.position.y * player.position.y);
+      if (radialDist > currentTunnelRadius) {
+        return true;
+      }
+      // Check obstacles collisions
+      for (let i = 0; i < obstacles.length; i++) {
+        let obs = obstacles[i];
+        if (!obs) continue;
+        // Only check obstacles close to the player in z
+        if (Math.abs(player.position.z - obs.position.z) < 1) {
+          let dist = BABYLON.Vector3.Distance(player.position, obs.position);
+          if (dist < OBSTACLE_SIZE) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+    
+    // ==== Game Over Handling ====
+    function gameOver() {
+      gameRunning = false;
+      // Stop the render loop
+      engine.stopRenderLoop();
+      
+      // Display game over UI with final stats
+      finalStatsDiv.innerHTML = `
+        <p>Final Score: ${Math.floor(score)}</p>
+        <p>Distance: ${player.position.z.toFixed(2)}</p>
+        <p>Obstacles: ${obstacles.length}</p>
+        <p>Seed: ${seed}</p>
+      `;
+      gameOverDiv.style.display = "block";
+    }
+    
+    // ==== Main Game Loop ====
+    function updateGame() {
+      if (!gameRunning) return;
+      
+      // Record ghost position (for future ghost run overlay)
+      ghostPositions.push(player.position.clone());
+      
+      // Apply gravity to vertical velocity
+      player.velocity.y += GRAVITY;
+      
+      // Update player position
+      player.position.addInPlace(player.velocity);
+      
+      // Move camera to player's position (first-person view)
+      scene.activeCamera.position.copyFrom(player.position);
+      
+      // Increase score based on distance traveled
+      score = player.position.z * 10;
+      scoreDisplay.innerText = "Score: " + Math.floor(score);
+      
+      // Check for collision
+      if (checkCollision()) {
+        gameOver();
+      }
+    }
+    
+    // ==== Render Loop and Scene Setup ====
+    let sceneToRender = createScene();
+    sceneToRender.registerBeforeRender(updateGame);
+    engine.runRenderLoop(function () {
+      if (scene) scene.render();
+    });
+    
+    // Resize event
+    window.addEventListener("resize", function () {
+      engine.resize();
+    });
+    
+    // Restart game functionality
+    restartBtn.addEventListener("click", function() {
+      location.reload();
+    });
+  </script>
 </body>
 </html>
