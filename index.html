@@ -163,18 +163,16 @@ There are three types of time-limited power-ups, with durations that accumulate 
     let engine = new BABYLON.Engine(canvas, true);
     let scene;
 
-    // We will rely on Babylon's physics for all collisions now.
-    // So we do not need a separate manual boundary check.
-
-    // Game settings & tunable variables
-    const GRAVITY = -9.81;                 // Physics gravity (mimics real gravity)
-    const UP_IMPULSE = 6;                  // Adjusted upward impulse for physics
-    const FORWARD_SPEED = 3;               // Forward speed (units per second)
-    const HORIZONTAL_SENSITIVITY = 0.03;   // Horizontal sensitivity for mouse or tilt
-    const INITIAL_TUNNEL_RADIUS = 5;
-    const NARROWING_RATE = 0.0005;         // how quickly tunnel narrows per unit z
-    const MIN_TUNNEL_RADIUS = 2;
-    const OBSTACLE_INTERVAL = 10;          // distance between obstacles
+    // Game settings & tunable variables.
+    // Increased tunnel radius so it's bigger.
+    const GRAVITY = -9.81;                 
+    const UP_IMPULSE = 6;                  
+    const FORWARD_SPEED = 3;               
+    const HORIZONTAL_SENSITIVITY = 0.03;   
+    const INITIAL_TUNNEL_RADIUS = 100;       // Increased starting radius.
+    const NARROWING_RATE = 0.0002;          // Slightly lowered narrowing rate.
+    const MIN_TUNNEL_RADIUS = 4;            // Make the minimal radius larger.
+    const OBSTACLE_INTERVAL = 10;           
     const OBSTACLE_SIZE = 0.5;
     const TUNNEL_LENGTH = 10000; 
 
@@ -210,26 +208,36 @@ There are three types of time-limited power-ups, with durations that accumulate 
         new BABYLON.CannonJSPlugin()
       );
 
-      // Create a basic light
+      // Basic light
       let light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
 
       // 1) Create the tunnel first
       createTunnel();
 
-      // 2) Create the player mesh next (so it's available when generating obstacles)
+      // 2) Create the player mesh next (so it's available for registering collisions)
       createPlayer();
 
-      // 3) Create all obstacles afterwards (so playerMesh is defined for collision registration)
+      // 3) Create obstacles
       generateObstacles();
 
-      // Create a camera and parent it to the player mesh so we get first-person view.
-      // We'll offset the camera slightly forward so it sits "inside" the sphere.
-      let camera = new BABYLON.UniversalCamera("camera", new BABYLON.Vector3(0, 0, 0), scene);
+      // Register collision with the tunnel walls => game over if player hits them.
+      // We do it here because we now have both the tunnel and the player.
+      playerMesh.physicsImpostor.registerOnPhysicsCollide(
+        tunnel.physicsImpostor,
+        function(main, collided) {
+          if (gameRunning) {
+            gameOver();
+          }
+        }
+      );
+
+      // Create a first-person camera, parented to the player mesh.
+      let camera = new BABYLON.UniversalCamera("camera", new BABYLON.Vector3(0,0,0), scene);
       camera.attachControl(canvas, true);
       camera.parent = playerMesh;
-      camera.position.z = 0;  // place camera at the center of the sphere
+      camera.position.z = 0;
 
-      // Register input handlers (mouse, pointer, tilt)
+      // Register input handlers
       setupInputHandlers();
 
       return scene;
@@ -237,9 +245,10 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
     // ==== Create Tunnel ====
     function createTunnel() {
-      // Build a path and corresponding radii from z=0 up to TUNNEL_LENGTH
       let path = [];
       let radii = [];
+
+      // Build path/radii from z=0 up to TUNNEL_LENGTH.
       for (let z = 0; z <= TUNNEL_LENGTH; z += 5) {
         let radius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
         path.push(new BABYLON.Vector3(0, 0, z));
@@ -258,8 +267,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       tunnel.material.diffuseColor = new BABYLON.Color3(0.2, 0.2, 0.2);
       tunnel.material.specularColor = new BABYLON.Color3(0, 0, 0);
 
-      // Create a physics impostor so the tunnel is collidable from the inside.
-      // mass = 0 => static object.
+      // Physics impostor for the tunnel so we can collide from inside.
       tunnel.physicsImpostor = new BABYLON.PhysicsImpostor(
         tunnel,
         BABYLON.PhysicsImpostor.MeshImpostor,
@@ -274,7 +282,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       playerMesh = BABYLON.MeshBuilder.CreateSphere("playerMesh", { diameter: 0.5 }, scene);
       playerMesh.position = new BABYLON.Vector3(0, 0, 0);
 
-      // Make it a dynamic physics body
+      // Dynamic physics body
       playerMesh.physicsImpostor = new BABYLON.PhysicsImpostor(
         playerMesh,
         BABYLON.PhysicsImpostor.SphereImpostor,
@@ -282,11 +290,10 @@ There are three types of time-limited power-ups, with durations that accumulate 
         scene
       );
 
-      // We set an initial forward velocity to keep moving through the tunnel.
-      // Then each frame we'll keep forcing the forward speed to remain constant.
+      // Initial forward velocity along Z.
       playerMesh.physicsImpostor.setLinearVelocity(new BABYLON.Vector3(0, 0, FORWARD_SPEED));
 
-      // For aesthetics, the player sphere can be invisible or tinted.
+      // Player material (optional visual)
       let pmat = new BABYLON.StandardMaterial("playerMat", scene);
       pmat.diffuseColor = new BABYLON.Color3(0, 0.5, 1);
       playerMesh.material = pmat;
@@ -307,7 +314,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
         obstacleMesh.material = new BABYLON.StandardMaterial("obsMat" + z, scene);
         obstacleMesh.material.diffuseColor = new BABYLON.Color3(Math.random(), Math.random(), Math.random());
 
-        // Create a static physics impostor for each obstacle so it can collide with the player.
+        // Static physics body for each obstacle to collide with player.
         obstacleMesh.physicsImpostor = new BABYLON.PhysicsImpostor(
           obstacleMesh,
           BABYLON.PhysicsImpostor.BoxImpostor,
@@ -315,7 +322,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
           scene
         );
 
-        // Register a collision event: if the player hits an obstacle => game over.
+        // Collision event => game over if player hits obstacle.
         playerMesh.physicsImpostor.registerOnPhysicsCollide(
           obstacleMesh.physicsImpostor,
           function(main, collided) {
@@ -324,13 +331,14 @@ There are three types of time-limited power-ups, with durations that accumulate 
             }
           }
         );
+
         obstacles.push(obstacleMesh);
       }
     }
 
     // ==== Input Handling ====
     function setupInputHandlers() {
-      // On pointer down (tap/click) => upward impulse.
+      // On pointer down => upward impulse
       canvas.addEventListener("pointerdown", function() {
         if (!gameRunning) return;
         let currentVel = playerMesh.physicsImpostor.getLinearVelocity();
@@ -338,7 +346,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
         playerMesh.physicsImpostor.setLinearVelocity(currentVel);
       });
 
-      // Mouse move for horizontal control on PC (pointermove)
+      // Mouse move => horizontal control on PC
       canvas.addEventListener("pointermove", function(e) {
         if (!gameRunning) return;
         let currentVel = playerMesh.physicsImpostor.getLinearVelocity();
@@ -346,7 +354,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
         playerMesh.physicsImpostor.setLinearVelocity(currentVel);
       });
 
-      // Sensor-based input on mobile (device orientation)
+      // Sensor-based input on mobile
       if (window.DeviceOrientationEvent) {
         window.addEventListener("deviceorientation", function(e) {
           if (!gameRunning) return;
@@ -372,11 +380,11 @@ There are three types of time-limited power-ups, with durations that accumulate 
       currentVel.z = FORWARD_SPEED;
       playerMesh.physicsImpostor.setLinearVelocity(currentVel);
 
-      // Update score based on how far along Z the player has traveled.
+      // Update score (distance traveled * 10)
       score = playerMesh.position.z * 10;
       scoreDisplay.innerText = "Score: " + Math.floor(score);
 
-      // If somehow the player escapes beyond the tunnel length, treat it as out of bounds => game over.
+      // If the player goes beyond the tunnel length => out of bounds => game over
       if (playerMesh.position.z > TUNNEL_LENGTH) {
         gameOver();
       }
@@ -410,7 +418,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       engine.resize();
     });
 
-    // Restart button just reloads the page for simplicity
+    // Restart button => reload the page for simplicity
     restartBtn.addEventListener("click", function() {
       location.reload();
     });
