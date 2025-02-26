@@ -168,11 +168,11 @@ There are three types of time-limited power-ups, with durations that accumulate 
     const UP_IMPULSE = 1;                  
     const FORWARD_SPEED = 30;               
     const HORIZONTAL_SENSITIVITY = 0.01;    
-    const INITIAL_TUNNEL_RADIUS = 20;       
-    const NARROWING_RATE = 0.01;            
+    const INITIAL_TUNNEL_RADIUS = 10;       
+    const NARROWING_RATE = 0.5;            
     const MIN_TUNNEL_RADIUS = 4;            
     const OBSTACLE_INTERVAL = 10;           
-    const OBSTACLE_SIZE = 0.5;
+    const OBSTACLE_SIZE = 0.7;
     const TUNNEL_LENGTH = 10000; 
 
     // Score & state
@@ -370,13 +370,15 @@ There are three types of time-limited power-ups, with durations that accumulate 
         playerMesh.physicsImpostor.setLinearVelocity(currentVel);
       });
 
-      // Mouse move => horizontal control on PC
+      // Mouse move => horizontal control on PC (commented out to let camera rotation drive movement)
+      /*
       canvas.addEventListener("pointermove", function(e) {
         if (!gameRunning) return;
         let currentVel = playerMesh.physicsImpostor.getLinearVelocity();
         currentVel.x += e.movementX * HORIZONTAL_SENSITIVITY;
         playerMesh.physicsImpostor.setLinearVelocity(currentVel);
       });
+      */
 
       // Sensor-based input on mobile
       if (window.DeviceOrientationEvent) {
@@ -399,10 +401,16 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // Record ghost position (for future ghost run overlay)
       ghostPositions.push(playerMesh.position.clone());
 
-      // Force consistent forward speed along Z.
-      let currentVel = playerMesh.physicsImpostor.getLinearVelocity();
-      currentVel.z = FORWARD_SPEED;
-      playerMesh.physicsImpostor.setLinearVelocity(currentVel);
+      // Apply forward speed in the direction the camera is facing, but keep vertical velocity from gravity/impulses.
+      let forward = scene.activeCamera.getDirection(BABYLON.Vector3.Forward());
+      forward.normalize();
+      let oldVel = playerMesh.physicsImpostor.getLinearVelocity();
+      let newVel = new BABYLON.Vector3(
+        forward.x * FORWARD_SPEED,
+        oldVel.y,
+        forward.z * FORWARD_SPEED
+      );
+      playerMesh.physicsImpostor.setLinearVelocity(newVel);
 
       // Update score (distance traveled * 10)
       score = playerMesh.position.z * 10;
