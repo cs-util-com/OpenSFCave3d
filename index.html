@@ -164,27 +164,55 @@ There are three types of time-limited power-ups, with durations that accumulate 
     let scene;
 
     // Game settings & tunable variables.
-    const GRAVITY = -1;                 
-    const UP_IMPULSE = 1;                  
-    const FORWARD_SPEED = 30;               
-    const HORIZONTAL_SENSITIVITY = 0.01;    
-    const INITIAL_TUNNEL_RADIUS = 10;       
-    const NARROWING_RATE = 0.5;            
-    const MIN_TUNNEL_RADIUS = 4;            
-    const OBSTACLE_INTERVAL = 10;           
+    const GRAVITY = -1.5;                 
+    const UP_IMPULSE = 1.5;                  
+    const FORWARD_SPEED = 30;            
+    const HORIZONTAL_SENSITIVITY = 0.01; 
+    const INITIAL_TUNNEL_RADIUS = 10;    
+    const NARROWING_RATE = 0.5;          
+    const MIN_TUNNEL_RADIUS = 4;         
+    const OBSTACLE_INTERVAL = 10;        
     const OBSTACLE_SIZE = 0.7;
     const TUNNEL_LENGTH = 10000; 
 
+    // Power-Up settings
+    const POWERUP_INTERVAL = 50;      // distance interval to attempt a power-up spawn
+    const POWERUP_SIZE = 0.5;
+    const POWERUP_BONUS_POINTS = 50;  // bonus for collecting any power-up
+
+    // Durations (in seconds) for each power-up
+    const SLOW_MO_DURATION = 5;
+    const SCORE_BOOST_DURATION = 5;
+    const AUTO_FIRE_DURATION = 5;
+
+    // Multipliers / factors for power-ups
+    const SLOW_MO_FACTOR = 0.5;      // slow down to 50% speed
+    const SCORE_BOOST_MULT = 2;      // double score while active
+    const AUTO_FIRE_INTERVAL = 1;    // fire every 1 second
+
     // Score & state
     let score = 0;
+    let scoreMultiplier = 1.0;         // modified by score-boost power-up
+    let obstaclesDestroyed = 0;        // increment when obstacles destroyed by projectiles
+    let powerUpsCollected = 0;         // increment when picking up any power-up
     let gameRunning = true;
     let seed = 123; // Displayed seed
 
     // For ghost run recording (simplified)
     let ghostPositions = [];
 
-    // Arrays for obstacles
+    // Arrays for obstacles & power-ups
     let obstacles = [];
+    let powerUps = [];
+
+    // Power-up timers/flags (time-limited effects)
+    let slowMoRemaining = 0;
+    let scoreBoostRemaining = 0;
+    let autoFireRemaining = 0;
+
+    // Auto-fire support
+    let nextAutoFireTime = 0;
+    let projectiles = [];
 
     // UI elements
     const scoreDisplay = document.getElementById("scoreDisplay");
@@ -197,7 +225,10 @@ There are three types of time-limited power-ups, with durations that accumulate 
     let tunnel;             // The visual + physical "cave" mesh
     let playerMesh;         // The player's sphere mesh (physics impostor)
 
-    // ==== A simple seeded random (for consistent obstacle placement by seed) ====
+    // We'll track lastZ for incremental scoring (rather than resetting score to z*10)
+    let lastZ = 0; // used to incrementally calculate distance-based score
+
+    // ==== A simple seeded random (for consistent obstacle & power-up placement by seed) ====
     function seededRandom() {
       // Basic LCG constants to demonstrate determinism; not cryptographically secure.
       seed = (seed * 9301 + 49297) % 233280;
@@ -226,10 +257,13 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // 3) Create obstacles
       generateObstacles();
 
+      // 4) Create power-ups
+      generatePowerUps();
+
       // Register collision with the cave walls => game over if player hits them.
       playerMesh.physicsImpostor.registerOnPhysicsCollide(
         tunnel.physicsImpostor,
-        function(main, collided) {
+        function() {
           if (gameRunning) {
             gameOver();
           }
@@ -263,9 +297,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
         // Build a ring of points around (0,0), each offset randomly for a spikier shape
         for (let t = 0; t < crossSectionPointsCount; t++) {
-          // Evenly distribute angles around the circle
           let angle = (t / crossSectionPointsCount) * 2 * Math.PI;
-          // Increase the random offset to make the cave more "spikey"
           let offset = (seededRandom() - 0.5) * 3.0;
           let radius = baseRadius + offset;
           let x = Math.cos(angle) * radius;
@@ -324,7 +356,6 @@ There are three types of time-limited power-ups, with durations that accumulate 
     function generateObstacles() {
       obstacles = [];
       for (let z = OBSTACLE_INTERVAL; z < TUNNEL_LENGTH; z += OBSTACLE_INTERVAL) {
-        // The "average" radius for this Z, used to place an obstacle within the cave bounds
         let tunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
         let angle = seededRandom() * Math.PI * 2;
         let radius = seededRandom() * (tunnelRadius - OBSTACLE_SIZE - 0.5);
@@ -345,10 +376,10 @@ There are three types of time-limited power-ups, with durations that accumulate 
           scene
         );
 
-        // Collision => game over
+        // Collision => game over (if from player). We'll also handle projectile collision separately.
         playerMesh.physicsImpostor.registerOnPhysicsCollide(
           obstacleMesh.physicsImpostor,
-          function(main, collided) {
+          function() {
             if (gameRunning) {
               gameOver();
             }
@@ -357,6 +388,130 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
         obstacles.push(obstacleMesh);
       }
+    }
+
+    // ==== Power-Up Generation ====
+    function generatePowerUps() {
+      powerUps = [];
+      for (let z = POWERUP_INTERVAL; z < TUNNEL_LENGTH; z += POWERUP_INTERVAL) {
+        // We'll randomly decide whether to spawn a power-up (e.g., 30% chance)
+        if (seededRandom() < 0.3) {
+          let tunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
+          let angle = seededRandom() * Math.PI * 2;
+          let radius = seededRandom() * (tunnelRadius - POWERUP_SIZE - 0.5);
+          let x = Math.cos(angle) * radius;
+          let y = Math.sin(angle) * radius;
+
+          // Randomly pick one of the three types
+          let types = ["slowMo", "scoreBoost", "autoFire"];
+          let pickIndex = Math.floor(seededRandom() * types.length);
+          let chosenType = types[pickIndex];
+
+          let powerUpMesh = BABYLON.MeshBuilder.CreateSphere("powerUp" + z, { diameter: POWERUP_SIZE }, scene);
+          powerUpMesh.position = new BABYLON.Vector3(x, y, z);
+          powerUpMesh.physicsImpostor = new BABYLON.PhysicsImpostor(
+            powerUpMesh,
+            BABYLON.PhysicsImpostor.SphereImpostor,
+            { mass: 0, friction: 0, restitution: 0 },
+            scene
+          );
+
+          // Assign color based on type & store type in metadata
+          powerUpMesh.metadata = { type: chosenType };
+          let mat = new BABYLON.StandardMaterial("powerUpMat" + z, scene);
+          if (chosenType === "slowMo") {
+            mat.diffuseColor = new BABYLON.Color3(0, 1, 0); // green
+          } else if (chosenType === "scoreBoost") {
+            mat.diffuseColor = new BABYLON.Color3(1, 1, 0); // yellow
+          } else {
+            mat.diffuseColor = new BABYLON.Color3(0.6, 0, 1); // purple
+          }
+          powerUpMesh.material = mat;
+
+          // Collision => collect power-up (no game over)
+          playerMesh.physicsImpostor.registerOnPhysicsCollide(
+            powerUpMesh.physicsImpostor,
+            function(main, collided) {
+              if (gameRunning && powerUpMesh.isVisible) {
+                collectPowerUp(powerUpMesh.metadata.type, powerUpMesh);
+              }
+            }
+          );
+
+          powerUps.push(powerUpMesh);
+        }
+      }
+    }
+
+    // ==== Collect Power-Up ====
+    function collectPowerUp(type, powerUpMesh) {
+      powerUpsCollected++;
+      score += POWERUP_BONUS_POINTS; // immediate bonus for picking it up
+
+      // Hide and disable the power-up mesh (so it's not collected twice)
+      powerUpMesh.isVisible = false;
+      powerUpMesh.setEnabled(false);
+
+      if (type === "slowMo") {
+        // Add to remaining time for slow-mo
+        slowMoRemaining += SLOW_MO_DURATION;
+      } else if (type === "scoreBoost") {
+        scoreBoostRemaining += SCORE_BOOST_DURATION;
+      } else if (type === "autoFire") {
+        autoFireRemaining += AUTO_FIRE_DURATION;
+      }
+    }
+
+    // ==== Projectiles Handling (auto-fire) ====
+    function createProjectile() {
+      // A small sphere to represent the projectile
+      let proj = BABYLON.MeshBuilder.CreateSphere("projectile", { diameter: 0.2 }, scene);
+      proj.position = playerMesh.position.clone();
+      proj.position.z += 1; // offset slightly in front
+
+      let mat = new BABYLON.StandardMaterial("projMat", scene);
+      mat.diffuseColor = new BABYLON.Color3(1, 1, 1); // white projectile
+      proj.material = mat;
+
+      // We'll store an initial direction from the player's current velocity vector.
+      let vel = playerMesh.physicsImpostor.getLinearVelocity().clone();
+      let speed = vel.length();
+      if (speed < 0.001) {
+        // fallback if nearly zero velocity: shoot forward along +Z
+        vel = new BABYLON.Vector3(0, 0, 1);
+      } else {
+        vel.normalize();
+      }
+      let projectileSpeed = 50; // speed of projectile
+
+      // Create a physics impostor for the projectile
+      proj.physicsImpostor = new BABYLON.PhysicsImpostor(
+        proj,
+        BABYLON.PhysicsImpostor.SphereImpostor,
+        { mass: 1, friction: 0, restitution: 0 },
+        scene
+      );
+      proj.physicsImpostor.setLinearVelocity(vel.scale(projectileSpeed));
+
+      // Track for cleanup & collision handling with obstacles
+      projectiles.push(proj);
+
+      // Check collisions with obstacles => destroy them and remove projectile
+      obstacles.forEach(obs => {
+        proj.physicsImpostor.registerOnPhysicsCollide(obs.physicsImpostor, function() {
+          if (obs.isVisible && proj.isVisible) {
+            obstaclesDestroyed++;
+            score += 25; // bonus points for destroying an obstacle
+
+            // remove obstacle
+            obs.isVisible = false;
+            obs.setEnabled(false);
+            // remove projectile
+            proj.isVisible = false;
+            proj.setEnabled(false);
+          }
+        });
+      });
     }
 
     // ==== Input Handling ====
@@ -397,27 +552,88 @@ There are three types of time-limited power-ups, with durations that accumulate 
     function updateGame() {
       if (!gameRunning) return;
 
+      let dt = engine.getDeltaTime() / 1000; // in seconds
+
+      // Update timers for power-ups
+      updatePowerUps(dt);
+
       // Record ghost position (for future ghost run overlay)
       ghostPositions.push(playerMesh.position.clone());
+
+      // Determine effective time scale (for "slow motion")
+      let timeScale = (slowMoRemaining > 0) ? SLOW_MO_FACTOR : 1.0;
 
       // Apply forward speed in the direction the camera is facing, but keep vertical velocity from gravity/impulses.
       let forward = scene.activeCamera.getDirection(BABYLON.Vector3.Forward());
       forward.normalize();
       let oldVel = playerMesh.physicsImpostor.getLinearVelocity();
+      // We'll scale the forward velocity by timeScale for a slow-mo effect on horizontal/forward movement.
       let newVel = new BABYLON.Vector3(
-        forward.x * FORWARD_SPEED,
+        forward.x * FORWARD_SPEED * timeScale,
         oldVel.y,
-        forward.z * FORWARD_SPEED
+        forward.z * FORWARD_SPEED * timeScale
       );
       playerMesh.physicsImpostor.setLinearVelocity(newVel);
 
-      // Update score (distance traveled * 10)
-      score = playerMesh.position.z * 10;
+      // Incremental distance-based scoring with current multiplier
+      let currentZ = playerMesh.position.z;
+      if (currentZ > lastZ) {
+        let dist = (currentZ - lastZ);
+        score += dist * 10 * scoreMultiplier;
+        lastZ = currentZ;
+      }
       scoreDisplay.innerText = "Score: " + Math.floor(score);
 
       // If the player goes beyond the tunnel length => out of bounds => game over
       if (playerMesh.position.z > TUNNEL_LENGTH) {
         gameOver();
+      }
+
+      // Auto-fire if active
+      if (autoFireRemaining > 0) {
+        if (engine.getDeltaTime() > 0) {
+          let now = performance.now() / 1000; // in seconds
+          if (now > nextAutoFireTime) {
+            createProjectile();
+            nextAutoFireTime = now + AUTO_FIRE_INTERVAL;
+          }
+        }
+      }
+
+      // Cleanup projectiles that have flown far away or are invisible
+      projectiles = projectiles.filter(proj => {
+        if (!proj.isVisible) return false;
+        if (proj.position.z > TUNNEL_LENGTH + 50) {
+          proj.isVisible = false;
+          proj.setEnabled(false);
+          return false;
+        }
+        return true;
+      });
+    }
+
+    // ==== Update Power-Up Timers ====
+    function updatePowerUps(dt) {
+      if (slowMoRemaining > 0) {
+        slowMoRemaining -= dt;
+        if (slowMoRemaining < 0) {
+          slowMoRemaining = 0;
+        }
+      }
+      if (scoreBoostRemaining > 0) {
+        scoreBoostRemaining -= dt;
+        if (scoreBoostRemaining <= 0) {
+          scoreBoostRemaining = 0;
+          scoreMultiplier = 1.0; // reset
+        } else {
+          scoreMultiplier = SCORE_BOOST_MULT;
+        }
+      }
+      if (autoFireRemaining > 0) {
+        autoFireRemaining -= dt;
+        if (autoFireRemaining < 0) {
+          autoFireRemaining = 0;
+        }
       }
     }
 
@@ -428,8 +644,8 @@ There are three types of time-limited power-ups, with durations that accumulate 
       finalStatsDiv.innerHTML = `
         <p>Final Score: ${Math.floor(score)}</p>
         <p>Distance Traveled: ${playerMesh.position.z.toFixed(2)}</p>
-        <p>Number of Obstacles Destroyed: 0</p>
-        <p>Number of Power-Ups Collected: 0</p>
+        <p>Number of Obstacles Destroyed: ${obstaclesDestroyed}</p>
+        <p>Number of Power-Ups Collected: ${powerUpsCollected}</p>
         <p>Seed: ${seed}</p>
       `;
       gameOverDiv.style.display = "block";
