@@ -718,21 +718,34 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // See if there's stored ghost data for this seed
       let savedData = localStorage.getItem("ghostPositions_" + seed);
       if (savedData) {
-        storedGhostPositions = JSON.parse(savedData);
-        
-        // Skip the first ~30 frames so the ghost starts visibly ahead
-        let framesToSkip = 30;
-        if (storedGhostPositions.length > framesToSkip) {
-          storedGhostPositions.splice(0, framesToSkip);
+        let parseData;
+        try {
+          parseData = JSON.parse(savedData);
+        } catch (e) {
+          parseData = null;
         }
+        if (!parseData) return;
 
-        // Create ghost mesh
-        ghostMesh = BABYLON.MeshBuilder.CreateSphere("ghostMesh", { diameter: 0.5 }, scene);
-        ghostMesh.position = new BABYLON.Vector3(0, 0, 0);
-        let ghostMat = new BABYLON.StandardMaterial("ghostMat", scene);
-        ghostMat.diffuseColor = new BABYLON.Color3(1, 1, 1);
-        ghostMat.alpha = 0.3; // semi-transparent
-        ghostMesh.material = ghostMat;
+        // If old format was just an array, use that. Otherwise, use positions.
+        let runPositions = Array.isArray(parseData) ? parseData : parseData.positions;
+
+        if (runPositions && runPositions.length > 0) {
+          storedGhostPositions = runPositions.slice(); // copy
+
+          // Skip the first ~30 frames so the ghost starts visibly ahead
+          let framesToSkip = 30;
+          if (storedGhostPositions.length > framesToSkip) {
+            storedGhostPositions.splice(0, framesToSkip);
+          }
+
+          // Create ghost mesh
+          ghostMesh = BABYLON.MeshBuilder.CreateSphere("ghostMesh", { diameter: 0.5 }, scene);
+          ghostMesh.position = new BABYLON.Vector3(0, 0, 0);
+          let ghostMat = new BABYLON.StandardMaterial("ghostMat", scene);
+          ghostMat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+          ghostMat.alpha = 0.3; // semi-transparent
+          ghostMesh.material = ghostMat;
+        }
       }
     }
 
@@ -740,18 +753,39 @@ There are three types of time-limited power-ups, with durations that accumulate 
     function storeGhostRun() {
       // We'll store ghost positions if we traveled some distance
       if (playerMesh && playerMesh.position.z > 0) {
-        // Overwrite old run only if this run is longer
+        // Prepare new run data (storing final score as well)
+        let newRunData = {
+          positions: ghostPositions,
+          finalScore: score
+        };
+
         let oldData = localStorage.getItem("ghostPositions_" + seed);
         if (oldData) {
-          let oldPositions = JSON.parse(oldData);
-          // Compare final distances
-          let oldDistance = oldPositions.length > 0 ? oldPositions[oldPositions.length - 1].z : 0;
-          if (playerMesh.position.z > oldDistance) {
-            localStorage.setItem("ghostPositions_" + seed, JSON.stringify(ghostPositions));
+          let oldRun;
+          try {
+            oldRun = JSON.parse(oldData);
+          } catch (e) {
+            oldRun = null;
+          }
+
+          if (oldRun) {
+            // If old format is just an array, there's no oldScore to compare; treat that as 0.
+            let oldScore = 0;
+            if (!Array.isArray(oldRun)) {
+              oldScore = oldRun.finalScore || 0;
+            }
+
+            // Now store the new run if this run's final score is higher than the old run's final score.
+            if (score > oldScore) {
+              localStorage.setItem("ghostPositions_" + seed, JSON.stringify(newRunData));
+            }
+          } else {
+            // If parsing failed or something else, just store new data
+            localStorage.setItem("ghostPositions_" + seed, JSON.stringify(newRunData));
           }
         } else {
           // No old data for this seed
-          localStorage.setItem("ghostPositions_" + seed, JSON.stringify(ghostPositions));
+          localStorage.setItem("ghostPositions_" + seed, JSON.stringify(newRunData));
         }
       }
     }
@@ -761,7 +795,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       gameRunning = false;
       engine.stopRenderLoop();
 
-      // Store ghost run
+      // Store ghost run (now based on final score, not just distance)
       storeGhostRun();
 
       finalStatsDiv.innerHTML = `
