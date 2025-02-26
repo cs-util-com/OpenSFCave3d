@@ -164,11 +164,10 @@ There are three types of time-limited power-ups, with durations that accumulate 
     let scene;
 
     // Game settings & tunable variables.
-    // Adjust these so the INITIAL_TUNNEL_RADIUS clearly matters.
     const GRAVITY = -1;                 
     const UP_IMPULSE = 1;                  
     const FORWARD_SPEED = 30;               
-    const HORIZONTAL_SENSITIVITY = 0.01;   
+    const HORIZONTAL_SENSITIVITY = 0.01;    
     const INITIAL_TUNNEL_RADIUS = 20;       
     const NARROWING_RATE = 0.01;            
     const MIN_TUNNEL_RADIUS = 4;            
@@ -195,7 +194,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     const restartBtn = document.getElementById("restartBtn");
 
     // References to key game objects
-    let tunnel;             // The visual + physical tunnel mesh
+    let tunnel;             // The visual + physical "cave" mesh
     let playerMesh;         // The player's sphere mesh (physics impostor)
 
     // ==== A simple seeded random (for consistent obstacle placement by seed) ====
@@ -218,16 +217,16 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // Basic light
       let light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
 
-      // 1) Create the tunnel first
-      createTunnel();
+      // 1) Create the cave-like tunnel
+      createAsymmetricCave();
 
-      // 2) Create the player mesh next (so it's available for registering collisions)
+      // 2) Create the player
       createPlayer();
 
       // 3) Create obstacles
       generateObstacles();
 
-      // Register collision with the tunnel walls => game over if player hits them.
+      // Register collision with the cave walls => game over if player hits them.
       playerMesh.physicsImpostor.registerOnPhysicsCollide(
         tunnel.physicsImpostor,
         function(main, collided) {
@@ -249,32 +248,48 @@ There are three types of time-limited power-ups, with durations that accumulate 
       return scene;
     }
 
-    // ==== Create Tunnel ====
-    function createTunnel() {
-      let path = [];
-      let radii = [];
+    // ==== Create an Asymmetric Cave Using a Ribbon ====
+    function createAsymmetricCave() {
+      const pathArray = [];
+      const stepSize = 5; // distance between cross-sections
+      const steps = TUNNEL_LENGTH / stepSize;
+      // Set how many points define each cross-section (low to keep it "low-poly")
+      const crossSectionPointsCount = 8;
 
-      // Build path/radii from z=0 up to TUNNEL_LENGTH, ensuring we shrink over distance.
-      for (let z = 0; z <= TUNNEL_LENGTH; z += 5) {
-        // We make the tunnel shrink by NARROWING_RATE * z, clamped by MIN_TUNNEL_RADIUS.
-        let radius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
-        path.push(new BABYLON.Vector3(0, 0, z));
-        radii.push(radius);
+      for (let i = 0; i <= steps; i++) {
+        let z = i * stepSize;
+        let baseRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
+        let crossSection = [];
+
+        // Build a ring of points around (0,0), each offset randomly to break symmetry
+        for (let t = 0; t < crossSectionPointsCount; t++) {
+          // Evenly distribute angles around the circle
+          let angle = (t / crossSectionPointsCount) * 2 * Math.PI;
+          // A random offset to vary the radius, giving a rocky shape
+          let offset = (seededRandom() - 0.5) * 1.5;
+          let radius = baseRadius + offset;
+          let x = Math.cos(angle) * radius;
+          let y = Math.sin(angle) * radius;
+          // We store the point at the actual Z (this is important for the final mesh to connect)
+          crossSection.push(new BABYLON.Vector3(x, y, z));
+        }
+        pathArray.push(crossSection);
       }
 
-      tunnel = BABYLON.MeshBuilder.CreateTube("tunnel", {
-        path: path,
-        radii: radii,
-        tessellation: 32,
-        cap: BABYLON.Mesh.NO_CAP,
+      // Create a ribbon to form the cave walls
+      tunnel = BABYLON.MeshBuilder.CreateRibbon("tunnel", {
+        pathArray: pathArray,
+        closeArray: false,
+        closePath: true,
         sideOrientation: BABYLON.Mesh.BACKSIDE
       }, scene);
 
+      // Give the cave a more "rocky" color
       tunnel.material = new BABYLON.StandardMaterial("tunnelMat", scene);
-      tunnel.material.diffuseColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+      tunnel.material.diffuseColor = new BABYLON.Color3(0.36, 0.24, 0.18);
       tunnel.material.specularColor = new BABYLON.Color3(0, 0, 0);
 
-      // Physics impostor for the tunnel so we can collide from inside.
+      // Physics impostor for collisions
       tunnel.physicsImpostor = new BABYLON.PhysicsImpostor(
         tunnel,
         BABYLON.PhysicsImpostor.MeshImpostor,
@@ -300,7 +315,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // Initial forward velocity along Z.
       playerMesh.physicsImpostor.setLinearVelocity(new BABYLON.Vector3(0, 0, FORWARD_SPEED));
 
-      // Player material (optional visual)
+      // Player material
       let pmat = new BABYLON.StandardMaterial("playerMat", scene);
       pmat.diffuseColor = new BABYLON.Color3(0, 0.5, 1);
       playerMesh.material = pmat;
@@ -310,20 +325,20 @@ There are three types of time-limited power-ups, with durations that accumulate 
     function generateObstacles() {
       obstacles = [];
       for (let z = OBSTACLE_INTERVAL; z < TUNNEL_LENGTH; z += OBSTACLE_INTERVAL) {
-        // The tunnel radius at this z, used to place an obstacle within its bounds.
+        // The "average" radius for this Z, used to place an obstacle within the cave bounds
         let tunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
         let angle = seededRandom() * Math.PI * 2;
         let radius = seededRandom() * (tunnelRadius - OBSTACLE_SIZE - 0.5);
         let x = Math.cos(angle) * radius;
         let y = Math.sin(angle) * radius;
 
-        // Create the obstacle as a red sphere for better differentiation
+        // Create the obstacle as a red sphere
         let obstacleMesh = BABYLON.MeshBuilder.CreateSphere("obstacle" + z, { diameter: OBSTACLE_SIZE }, scene);
         obstacleMesh.position = new BABYLON.Vector3(x, y, z);
         obstacleMesh.material = new BABYLON.StandardMaterial("obsMat" + z, scene);
         obstacleMesh.material.diffuseColor = new BABYLON.Color3(1, 0, 0); // Red color
 
-        // Static physics body for each obstacle to collide with player.
+        // Static physics body for each obstacle
         obstacleMesh.physicsImpostor = new BABYLON.PhysicsImpostor(
           obstacleMesh,
           BABYLON.PhysicsImpostor.SphereImpostor,
@@ -331,7 +346,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
           scene
         );
 
-        // Collision event => game over if player hits obstacle.
+        // Collision => game over
         playerMesh.physicsImpostor.registerOnPhysicsCollide(
           obstacleMesh.physicsImpostor,
           function(main, collided) {
