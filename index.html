@@ -251,7 +251,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     let tunnel; 
     let playerMesh; 
 
-    // We'll track lastZ for incremental scoring (rather than resetting score to z*10)
+    // We'll track lastZ for incremental scoring
     let lastZ = 0; 
 
     // ==== A simple seeded random (for consistent obstacle & power-up placement by seed) ====
@@ -626,6 +626,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // Update ghost replay if present
       if (ghostMesh && storedGhostPositions.length > 0) {
         if (ghostIndex < storedGhostPositions.length) {
+          // The ghost is now ahead because we skipped the first second of positions in initGhostRun()
           ghostMesh.position.copyFrom(storedGhostPositions[ghostIndex]);
           ghostIndex++;
         }
@@ -663,6 +664,14 @@ There are three types of time-limited power-ups, with durations that accumulate 
       let savedData = localStorage.getItem("ghostPositions_" + seed);
       if (savedData) {
         storedGhostPositions = JSON.parse(savedData);
+        
+        // Skip the first second (~60 frames at ~60fps) to ensure the ghost is visible ahead in time.
+        // This makes the ghost start its replay "1 second in" so it appears ahead.
+        let framesToSkip = 30;
+        if (storedGhostPositions.length > framesToSkip) {
+          storedGhostPositions.splice(0, framesToSkip);
+        }
+
         // Create ghost mesh
         ghostMesh = BABYLON.MeshBuilder.CreateSphere("ghostMesh", { diameter: 0.5 }, scene);
         ghostMesh.position = new BABYLON.Vector3(0, 0, 0);
