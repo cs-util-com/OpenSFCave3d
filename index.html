@@ -253,24 +253,23 @@ There are three types of time-limited power-ups, with durations that accumulate 
       const pathArray = [];
       const stepSize = 5; // distance between cross-sections
       const steps = TUNNEL_LENGTH / stepSize;
-      // Set how many points define each cross-section (low to keep it "low-poly")
-      const crossSectionPointsCount = 8;
+      // Increased cross-section points to create a spikier outline
+      const crossSectionPointsCount = 16;
 
       for (let i = 0; i <= steps; i++) {
         let z = i * stepSize;
         let baseRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
         let crossSection = [];
 
-        // Build a ring of points around (0,0), each offset randomly to break symmetry
+        // Build a ring of points around (0,0), each offset randomly for a spikier shape
         for (let t = 0; t < crossSectionPointsCount; t++) {
           // Evenly distribute angles around the circle
           let angle = (t / crossSectionPointsCount) * 2 * Math.PI;
-          // A random offset to vary the radius, giving a rocky shape
-          let offset = (seededRandom() - 0.5) * 1.5;
+          // Increase the random offset to make the cave more "spikey"
+          let offset = (seededRandom() - 0.5) * 3.0;
           let radius = baseRadius + offset;
           let x = Math.cos(angle) * radius;
           let y = Math.sin(angle) * radius;
-          // We store the point at the actual Z (this is important for the final mesh to connect)
           crossSection.push(new BABYLON.Vector3(x, y, z));
         }
         pathArray.push(crossSection);
