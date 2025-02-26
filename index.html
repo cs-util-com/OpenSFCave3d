@@ -146,12 +146,14 @@ There are three types of time-limited power-ups, with durations that accumulate 
     /* Toast styling */
     #toastContainer {
       position: absolute;
-      top: 60px;
-      left: 10px;
+      bottom: 30%;
+      left: 50%;
+      transform: translateX(-50%);
       z-index: 9999;
       display: flex;
       flex-direction: column;
       gap: 10px;
+      align-items: center;
     }
     .toast {
       background: rgba(255, 255, 255, 0.1);
@@ -603,7 +605,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
         playerMesh.physicsImpostor.setLinearVelocity(currentVel);
       });
 
-      // Sensor-based input on mobile
+      // Sensor-based input on mobile (left/right tilt)
       if (window.DeviceOrientationEvent) {
         window.addEventListener("deviceorientation", function(e) {
           if (!gameRunning) return;
@@ -628,16 +630,16 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // Record ghost position (for future replay)
       ghostPositions.push(playerMesh.position.clone());
 
-      // Determine effective time scale (slow-mo)
+      // Determine effective time scale (slow-mo) for forward speed.
       let timeScale = (slowMoRemaining > 0) ? SLOW_MO_FACTOR : 1.0;
 
-      // Forward speed
+      // Forward speed adjustment.
       let forward = scene.activeCamera.getDirection(BABYLON.Vector3.Forward());
       forward.normalize();
       let oldVel = playerMesh.physicsImpostor.getLinearVelocity();
       let newVel = new BABYLON.Vector3(
         forward.x * FORWARD_SPEED * timeScale,
-        oldVel.y,
+        oldVel.y,  // keep whatever vertical velocity was (including gravity)
         forward.z * FORWARD_SPEED * timeScale
       );
       playerMesh.physicsImpostor.setLinearVelocity(newVel);
@@ -656,7 +658,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
         gameOver();
       }
 
-      // Auto-fire
+      // Auto-fire handling
       if (autoFireRemaining > 0) {
         let now = performance.now() / 1000;
         if (now > nextAutoFireTime) {
@@ -665,7 +667,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
         }
       }
 
-      // Cleanup projectiles
+      // Cleanup projectiles that have gone far past the tunnel
       projectiles = projectiles.filter(proj => {
         if (!proj.isVisible) return false;
         if (proj.position.z > TUNNEL_LENGTH + 50) {
@@ -679,7 +681,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // Update ghost replay if present
       if (ghostMesh && storedGhostPositions.length > 0) {
         if (ghostIndex < storedGhostPositions.length) {
-          // The ghost is now ahead because we skipped the first second of positions in initGhostRun()
+          // The ghost is now ahead because we skipped the first second in initGhostRun()
           ghostMesh.position.copyFrom(storedGhostPositions[ghostIndex]);
           ghostIndex++;
         }
@@ -718,7 +720,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       if (savedData) {
         storedGhostPositions = JSON.parse(savedData);
         
-        // Skip the first second (~60 frames at ~60fps) to ensure the ghost is visible ahead in time.
+        // Skip the first ~30 frames so the ghost starts visibly ahead
         let framesToSkip = 30;
         if (storedGhostPositions.length > framesToSkip) {
           storedGhostPositions.splice(0, framesToSkip);
@@ -743,7 +745,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
         if (oldData) {
           let oldPositions = JSON.parse(oldData);
           // Compare final distances
-          let oldDistance = oldPositions.length > 0 ? oldPositions[oldPositions.length-1].z : 0;
+          let oldDistance = oldPositions.length > 0 ? oldPositions[oldPositions.length - 1].z : 0;
           if (playerMesh.position.z > oldDistance) {
             localStorage.setItem("ghostPositions_" + seed, JSON.stringify(ghostPositions));
           }
