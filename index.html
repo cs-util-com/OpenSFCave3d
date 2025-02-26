@@ -188,12 +188,13 @@ There are three types of time-limited power-ups, with durations that accumulate 
     <h1>Game Over</h1>
     <div id="finalStats"></div>
     <div>
-      <!-- Seed management UI moved here -->
-      <input id="seedInput" class="smallInput" type="text" placeholder="Seed">
+      <!-- Seed management UI. Will display current seed in input. -->
+      <input id="seedInput" class="smallInput" type="text">
       <button id="setSeedBtn">Set Seed</button>
     </div>
     <br>
     <button id="restartBtn">Restart</button>
+    <button id="shareBtn">Share</button>
   </div>
 
   <script>
@@ -276,6 +277,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     const restartBtn = document.getElementById("restartBtn");
     const setSeedBtn = document.getElementById("setSeedBtn");
     const seedInput = document.getElementById("seedInput");
+    const shareBtn = document.getElementById("shareBtn");
 
     // Toast container
     const toastContainer = document.getElementById("toastContainer");
@@ -805,15 +807,8 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // Store ghost run (now based on final score, not just distance)
       storeGhostRun();
 
-      finalStatsDiv.innerHTML = `
-        <p>Final Score: ${Math.floor(score)}</p>
-        <p>Distance Traveled: ${playerMesh.position.z.toFixed(2)}</p>
-        <p>Number of Obstacles Destroyed: ${obstaclesDestroyed}</p>
-        <p>Number of Power-Ups Collected: ${powerUpsCollected}</p>
-        <p>Seed: ${seed}</p>
-      `;
-
-      // Show high score for this seed if available
+      // Check if there's a best score for this seed to display next to the final score
+      let bestScorePart = "";
       let oldData = localStorage.getItem("ghostPositions_" + seed);
       if (oldData) {
         let oldRun = null;
@@ -821,9 +816,16 @@ There are three types of time-limited power-ups, with durations that accumulate 
           oldRun = JSON.parse(oldData);
         } catch (e) {}
         if (oldRun && !Array.isArray(oldRun) && oldRun.finalScore) {
-          finalStatsDiv.innerHTML += `<p>Best Score so far for this Seed: ${Math.floor(oldRun.finalScore)}</p>`;
+          bestScorePart = ` (vs Best Run: ${Math.floor(oldRun.finalScore)})`;
         }
       }
+
+      finalStatsDiv.innerHTML = `
+        <p>Final Score: ${Math.floor(score)}${bestScorePart}</p>
+        <p>Distance Traveled: ${playerMesh.position.z.toFixed(2)}</p>
+        <p>Number of Obstacles Destroyed: ${obstaclesDestroyed}</p>
+        <p>Number of Power-Ups Collected: ${powerUpsCollected}</p>
+      `;
 
       gameOverDiv.style.display = "block";
     }
@@ -843,6 +845,9 @@ There are three types of time-limited power-ups, with durations that accumulate 
       engine.resize();
     });
 
+    // Set the current seed in the input field for easy viewing/editing
+    seedInput.value = seed;
+
     // Restart button => reload
     restartBtn.addEventListener("click", function() {
       location.reload();
@@ -853,6 +858,22 @@ There are three types of time-limited power-ups, with durations that accumulate 
       let newSeed = parseInt(seedInput.value);
       if (!isNaN(newSeed)) {
         window.location.href = window.location.pathname + "?seed=" + newSeed;
+      }
+    });
+
+    // Share button => uses the native share functionality (if available)
+    shareBtn.addEventListener("click", function() {
+      if (navigator.share) {
+        navigator.share({
+          title: "Open 3D SFCave",
+          url: window.location.href
+        }).catch(console.error);
+      } else {
+        alert(
+          "Sharing not supported by your browser.\n" +
+          "Copy this link instead:\n" +
+          window.location.href
+        );
       }
     });
   </script>
