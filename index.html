@@ -143,6 +143,28 @@ There are three types of time-limited power-ups, with durations that accumulate 
     .smallInput {
       width: 80px;
     }
+    /* Toast styling */
+    #toastContainer {
+      position: absolute;
+      top: 60px;
+      left: 10px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .toast {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid #fff;
+      padding: 5px 10px;
+      border-radius: 3px;
+      animation: fadeOut 2s forwards;
+    }
+    @keyframes fadeOut {
+      0% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { opacity: 0; }
+    }
   </style>
   <!-- Include Babylon.js and Cannon.js (for physics) from CDN -->
   <script src="https://cdn.babylonjs.com/babylon.js"></script>
@@ -164,6 +186,9 @@ There are three types of time-limited power-ups, with durations that accumulate 
     </div>
   </div>
   
+  <!-- Container for toasts -->
+  <div id="toastContainer"></div>
+
   <div id="gameOver">
     <h1>Game Over</h1>
     <div id="finalStats"></div>
@@ -176,13 +201,15 @@ There are three types of time-limited power-ups, with durations that accumulate 
     const engine = new BABYLON.Engine(canvas, true);
     let scene;
 
-    // Parse seed from URL if present, otherwise use a random seed.
+    // Parse seed from URL if present, otherwise use a random seed
     function getSeedFromURL() {
       const params = new URLSearchParams(window.location.search);
       let s = parseInt(params.get("seed"));
       if (isNaN(s)) {
-        // If no seed is specified, use a random seed.
+        // If no seed is specified, use a random seed and update the URL so it doesn't get lost on refresh
         s = Math.floor(Math.random() * 100000);
+        params.set("seed", s);
+        window.history.replaceState({}, "", "?" + params.toString());
       }
       return s;
     }
@@ -250,6 +277,9 @@ There are three types of time-limited power-ups, with durations that accumulate 
     const setSeedBtn = document.getElementById("setSeedBtn");
     const seedInput = document.getElementById("seedInput");
 
+    // Toast container
+    const toastContainer = document.getElementById("toastContainer");
+
     // References to key game objects
     let tunnel; 
     let playerMesh; 
@@ -283,7 +313,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // 2) Create the player
       createPlayer();
 
-      // 3) Create obstacles
+      // 3) Create obstacles (start them further in so the player has time to react)
       generateObstacles();
 
       // 4) Create power-ups
@@ -388,7 +418,8 @@ There are three types of time-limited power-ups, with durations that accumulate 
       let obstacleMaterial = new BABYLON.StandardMaterial("obsMat", scene);
       obstacleMaterial.diffuseColor = new BABYLON.Color3(1, 0, 0); // Red color
 
-      for (let z = OBSTACLE_INTERVAL; z < TUNNEL_LENGTH; z += OBSTACLE_INTERVAL) {
+      // Start obstacles further in, so the first ones appear later
+      for (let z = 30; z < TUNNEL_LENGTH; z += OBSTACLE_INTERVAL) {
         let tunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
         let angle = seededRandom() * Math.PI * 2;
         let radius = seededRandom() * (tunnelRadius - OBSTACLE_SIZE - 0.5);
@@ -480,6 +511,21 @@ There are three types of time-limited power-ups, with durations that accumulate 
       }
     }
 
+    // ==== Utility: Show Toast ====
+    function showToast(message) {
+      const toast = document.createElement("div");
+      toast.className = "toast";
+      toast.innerText = message;
+      toastContainer.appendChild(toast);
+
+      // Remove the toast from DOM after 2 seconds
+      setTimeout(() => {
+        if (toastContainer.contains(toast)) {
+          toastContainer.removeChild(toast);
+        }
+      }, 2000);
+    }
+
     // ==== Collect Power-Up ====
     function collectPowerUp(type, powerUpMesh) {
       powerUpsCollected++;
@@ -489,11 +535,15 @@ There are three types of time-limited power-ups, with durations that accumulate 
       powerUpMesh.isVisible = false;
       powerUpMesh.setEnabled(false);
 
+      // Show a small toast with the name of the power-up
       if (type === "slowMo") {
+        showToast("Collected: Slow-Mo");
         slowMoRemaining += SLOW_MO_DURATION;
       } else if (type === "scoreBoost") {
+        showToast("Collected: Score Boost");
         scoreBoostRemaining += SCORE_BOOST_DURATION;
       } else if (type === "autoFire") {
+        showToast("Collected: Auto-Fire");
         autoFireRemaining += AUTO_FIRE_DURATION;
       }
     }
@@ -669,7 +719,6 @@ There are three types of time-limited power-ups, with durations that accumulate 
         storedGhostPositions = JSON.parse(savedData);
         
         // Skip the first second (~60 frames at ~60fps) to ensure the ghost is visible ahead in time.
-        // This makes the ghost start its replay "1 second in" so it appears ahead.
         let framesToSkip = 30;
         if (storedGhostPositions.length > framesToSkip) {
           storedGhostPositions.splice(0, framesToSkip);
