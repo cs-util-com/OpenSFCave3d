@@ -175,25 +175,24 @@ There are three types of time-limited power-ups, with durations that accumulate 
 <body>
   <canvas id="renderCanvas"></canvas>
   
+  <!-- Top-left UI overlay now only shows the current score -->
   <div id="uiOverlay">
-    <div>
-      <span id="scoreDisplay">Score: 0</span><br>
-      <span id="seedDisplay">Seed: 12345</span>
-    </div>
-    <br>
-    <!-- Seed management UI -->
-    <div>
-      <input id="seedInput" class="smallInput" type="text" placeholder="Seed">
-      <button id="setSeedBtn">Set Seed</button>
-    </div>
+    <span id="scoreDisplay">Score: 0</span>
   </div>
   
   <!-- Container for toasts -->
   <div id="toastContainer"></div>
 
+  <!-- Game Over screen, includes final stats and seed management -->
   <div id="gameOver">
     <h1>Game Over</h1>
     <div id="finalStats"></div>
+    <div>
+      <!-- Seed management UI moved here -->
+      <input id="seedInput" class="smallInput" type="text" placeholder="Seed">
+      <button id="setSeedBtn">Set Seed</button>
+    </div>
+    <br>
     <button id="restartBtn">Restart</button>
   </div>
 
@@ -224,7 +223,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     let ghostIndex = 0;            // track frames for replay
 
     // Game settings & tunable variables.
-    const GRAVITY = -1.5;                  // downward gravity
+    const GRAVITY = -1.5;                  // downward gravity (constant)
     const UP_IMPULSE = 1.5;               // upward impulse on tap/click
     const FORWARD_SPEED = 30;             // forward speed along the tunnel
     const HORIZONTAL_SENSITIVITY = 0.01;  // for tilt or mouse-based movement
@@ -272,7 +271,6 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
     // UI elements
     const scoreDisplay = document.getElementById("scoreDisplay");
-    const seedDisplay = document.getElementById("seedDisplay");
     const gameOverDiv = document.getElementById("gameOver");
     const finalStatsDiv = document.getElementById("finalStats");
     const restartBtn = document.getElementById("restartBtn");
@@ -289,7 +287,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     // We'll track lastZ for incremental scoring
     let lastZ = 0; 
 
-    // ==== A simple seeded random (for consistent obstacle & power-up placement by seed) ====
+    // A simple seeded random (for consistent obstacle & power-up placement by seed)
     function seededRandom() {
       // Basic LCG constants to demonstrate determinism; not cryptographically secure.
       seed = (seed * 9301 + 49297) % 233280;
@@ -300,11 +298,15 @@ There are three types of time-limited power-ups, with durations that accumulate 
     function createScene() {
       scene = new BABYLON.Scene(engine);
 
-      // Enable physics (using CannonJSPlugin)
+      // Enable physics (using CannonJSPlugin) with a fixed time step set later
       scene.enablePhysics(
         new BABYLON.Vector3(0, GRAVITY, 0),
         new BABYLON.CannonJSPlugin()
       );
+
+      // We'll manage slow motion by adjusting the physics time step below.
+      let baseTimeStep = 1/60;
+      scene.getPhysicsEngine().setTimeStep(baseTimeStep);
 
       // Basic light
       let light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
@@ -396,6 +398,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       );
 
       // Initial forward velocity
+      // We'll keep setting forward velocity in the update loop; just set once here for start.
       playerMesh.physicsImpostor.setLinearVelocity(new BABYLON.Vector3(0, 0, FORWARD_SPEED));
 
       // Player material
@@ -581,15 +584,14 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
       // Collision with obstacles => destroy them and remove projectile
       obstacles.forEach(obs => {
-        proj.physicsImpostor.registerOnPhysicsCollide(obs.physicsImpostor, function() {
+        proj.physicsImpostor.registerOnPhysicsCollide(obs.physicsImpostor, function(main, collided) {
           if (obs.isVisible && proj.isVisible) {
             obstaclesDestroyed++;
             score += 25; // bonus points
 
-            obs.isVisible = false;
-            obs.setEnabled(false);
-            proj.isVisible = false;
-            proj.setEnabled(false);
+            // Remove both from scene to ensure they disappear right away
+            obs.dispose();
+            proj.dispose();
           }
         });
       });
@@ -619,36 +621,32 @@ There are three types of time-limited power-ups, with durations that accumulate 
       }
     }
 
+    // We keep a reference for the base time step to adjust for slow-mo on each frame.
+    let baseTimeStep = 1 / 60;
+
     // ==== Main Update Loop ====
     function updateGame() {
       if (!gameRunning) return;
-      let dt = engine.getDeltaTime() / 1000; // in seconds
+      let dt = engine.getDeltaTime() / 1000; // in seconds (for timers, etc.)
 
-      // Update power-ups
+      // Update power-ups timers
       updatePowerUps(dt);
 
-      // Adjust physics gravity if slow-mo is active, so the player doesn't just drop faster relative to forward motion
+      // Adjust the physics time step for slow motion if needed
       if (slowMoRemaining > 0) {
-        // Scale gravity so vertical drop is also slowed
-        scene.getPhysicsEngine().setGravity(new BABYLON.Vector3(0, GRAVITY * SLOW_MO_FACTOR, 0));
-      } else if (slowMoRemaining === 0) {
-        scene.getPhysicsEngine().setGravity(new BABYLON.Vector3(0, GRAVITY, 0));
+        scene.getPhysicsEngine().setTimeStep(baseTimeStep * SLOW_MO_FACTOR);
+      } else {
+        scene.getPhysicsEngine().setTimeStep(baseTimeStep);
       }
 
-      // Record ghost position (for future replay)
-      ghostPositions.push(playerMesh.position.clone());
-
-      // Determine effective time scale (slow-mo) for forward speed
-      let timeScale = (slowMoRemaining > 0) ? SLOW_MO_FACTOR : 1.0;
-
-      // Forward speed adjustment while preserving vertical velocity
+      // Maintain forward velocity but let gravity & vertical velocity remain from physics.
+      let oldVel = playerMesh.physicsImpostor.getLinearVelocity();
       let forward = scene.activeCamera.getDirection(BABYLON.Vector3.Forward());
       forward.normalize();
-      let oldVel = playerMesh.physicsImpostor.getLinearVelocity();
       let newVel = new BABYLON.Vector3(
-        forward.x * FORWARD_SPEED * timeScale,
-        oldVel.y,  // keep whatever vertical velocity was (including gravity)
-        forward.z * FORWARD_SPEED * timeScale
+        forward.x * FORWARD_SPEED,
+        oldVel.y,
+        forward.z * FORWARD_SPEED
       );
       playerMesh.physicsImpostor.setLinearVelocity(newVel);
 
@@ -661,7 +659,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       }
       scoreDisplay.innerText = "Score: " + Math.floor(score);
 
-      // Check out of bounds
+      // Check out of bounds (end of tunnel)
       if (playerMesh.position.z > TUNNEL_LENGTH) {
         gameOver();
       }
@@ -675,12 +673,11 @@ There are three types of time-limited power-ups, with durations that accumulate 
         }
       }
 
-      // Cleanup projectiles that have gone far past the tunnel
+      // Cleanup projectiles that have gone past the tunnel
       projectiles = projectiles.filter(proj => {
         if (!proj.isVisible) return false;
         if (proj.position.z > TUNNEL_LENGTH + 50) {
-          proj.isVisible = false;
-          proj.setEnabled(false);
+          proj.dispose();
           return false;
         }
         return true;
@@ -693,6 +690,9 @@ There are three types of time-limited power-ups, with durations that accumulate 
           ghostIndex++;
         }
       }
+
+      // Record ghost position (for future replay)
+      ghostPositions.push(playerMesh.position.clone());
     }
 
     // ==== Update Power-Up Timers ====
@@ -812,6 +812,19 @@ There are three types of time-limited power-ups, with durations that accumulate 
         <p>Number of Power-Ups Collected: ${powerUpsCollected}</p>
         <p>Seed: ${seed}</p>
       `;
+
+      // Show high score for this seed if available
+      let oldData = localStorage.getItem("ghostPositions_" + seed);
+      if (oldData) {
+        let oldRun = null;
+        try {
+          oldRun = JSON.parse(oldData);
+        } catch (e) {}
+        if (oldRun && !Array.isArray(oldRun) && oldRun.finalScore) {
+          finalStatsDiv.innerHTML += `<p>Best Score so far for this Seed: ${Math.floor(oldRun.finalScore)}</p>`;
+        }
+      }
+
       gameOverDiv.style.display = "block";
     }
 
@@ -834,9 +847,6 @@ There are three types of time-limited power-ups, with durations that accumulate 
     restartBtn.addEventListener("click", function() {
       location.reload();
     });
-
-    // Display seed
-    seedDisplay.innerText = "Seed: " + seed;
 
     // Set new seed button
     setSeedBtn.addEventListener("click", function() {
