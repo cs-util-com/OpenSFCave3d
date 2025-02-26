@@ -246,7 +246,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     const AUTO_FIRE_DURATION = 5;
 
     // Multipliers / factors for power-ups
-    const SLOW_MO_FACTOR = 0.5;     
+    const SLOW_MO_FACTOR = 0.5;     // Slow-mo speed factor
     const SCORE_BOOST_MULT = 2;     
     const AUTO_FIRE_INTERVAL = 1;   
 
@@ -627,13 +627,21 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // Update power-ups
       updatePowerUps(dt);
 
+      // Adjust physics gravity if slow-mo is active, so the player doesn't just drop faster relative to forward motion
+      if (slowMoRemaining > 0) {
+        // Scale gravity so vertical drop is also slowed
+        scene.getPhysicsEngine().setGravity(new BABYLON.Vector3(0, GRAVITY * SLOW_MO_FACTOR, 0));
+      } else if (slowMoRemaining === 0) {
+        scene.getPhysicsEngine().setGravity(new BABYLON.Vector3(0, GRAVITY, 0));
+      }
+
       // Record ghost position (for future replay)
       ghostPositions.push(playerMesh.position.clone());
 
-      // Determine effective time scale (slow-mo) for forward speed.
+      // Determine effective time scale (slow-mo) for forward speed
       let timeScale = (slowMoRemaining > 0) ? SLOW_MO_FACTOR : 1.0;
 
-      // Forward speed adjustment.
+      // Forward speed adjustment while preserving vertical velocity
       let forward = scene.activeCamera.getDirection(BABYLON.Vector3.Forward());
       forward.normalize();
       let oldVel = playerMesh.physicsImpostor.getLinearVelocity();
@@ -681,7 +689,6 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // Update ghost replay if present
       if (ghostMesh && storedGhostPositions.length > 0) {
         if (ghostIndex < storedGhostPositions.length) {
-          // The ghost is now ahead because we skipped the first second in initGhostRun()
           ghostMesh.position.copyFrom(storedGhostPositions[ghostIndex]);
           ghostIndex++;
         }
