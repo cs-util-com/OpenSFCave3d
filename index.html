@@ -176,11 +176,14 @@ There are three types of time-limited power-ups, with durations that accumulate 
     const engine = new BABYLON.Engine(canvas, true);
     let scene;
 
-    // Parse seed from URL if present, otherwise default to 123.
+    // Parse seed from URL if present, otherwise use a random seed.
     function getSeedFromURL() {
       const params = new URLSearchParams(window.location.search);
       let s = parseInt(params.get("seed"));
-      if (isNaN(s)) s = 123;
+      if (isNaN(s)) {
+        // If no seed is specified, use a random seed.
+        s = Math.floor(Math.random() * 100000);
+      }
       return s;
     }
     let seed = getSeedFromURL(); // Displayed seed
