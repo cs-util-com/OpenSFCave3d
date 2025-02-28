@@ -190,7 +190,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     <div>
       <!-- Seed management UI. Will display current seed in input. -->
       <input id="seedInput" class="smallInput" type="text">
-      <button id="setSeedBtn">Set Seed</button>
+      <button id="setSeedBtn">Generate Level</button>
     </div>
     <br>
     <button id="restartBtn">Restart</button>
@@ -225,8 +225,8 @@ There are three types of time-limited power-ups, with durations that accumulate 
     let ghostIndex = 0;            // track frames for replay
 
     // Game settings & tunable variables.
-    const GRAVITY = -20;                  // downward gravity (constant)
-    const UP_IMPULSE = 5;                // upward impulse on tap/click
+    const GRAVITY = -16;                  // downward gravity (constant)
+    const UP_IMPULSE = 11;                // upward impulse on tap/click
     const FORWARD_SPEED = 20;            // forward speed along the tunnel
     const HORIZONTAL_SENSITIVITY = 0.01;   
     const INITIAL_TUNNEL_RADIUS = 40;      
@@ -303,8 +303,14 @@ There are three types of time-limited power-ups, with durations that accumulate 
     let pathCenters = [];  // array of BABYLON.Vector2 indicating the center x,y for each discrete Z step
 
     // Utility for returning the clamped tunnel radius at a given z
+    // Also ensures the tunnel doesn't narrow too quickly in the very beginning.
     function getTunnelRadiusAtZ(z) {
-      return Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
+      // For the first 30 units, don't narrow at all:
+      if (z < 100) {
+        return INITIAL_TUNNEL_RADIUS;
+      }
+      // After 30, normal narrowing:
+            return Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
     }
 
     // Utility to get a random position (x,y) around center2D within maxRadius
