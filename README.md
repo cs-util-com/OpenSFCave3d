@@ -1,81 +1,97 @@
 # Open 3D SFCave
 
-A 3D twist on the classic sfcave game, played from a first-person perspective inside a procedurally generated tunnel.
+A modern, **3D twist on the classic sfcave** experience, viewed from a thrilling first-person perspective.  
+Dive into a procedurally generated tunnel, dodge obstacles, and see how long you can survive!
 
-### Play at >> https://cs-util-com.github.io/OpenSFCave3d/ <<
+### **Play Here:** [https://cs-util-com.github.io/OpenSFCave3d/](https://cs-util-com.github.io/OpenSFCave3d/)
+
+---
 
 ## Overview
 
-- **Concept:** Maneuver a dot (representing a plane) through a narrowing 3D tunnel while avoiding obstacles.  
-- **Perspective:** First-person view (camera parented to the dot).  
-- **Objective:** Survive as long as possible to achieve a high score.
+- **Concept:** Steer your aircraft through a tunnel that continuously **narrows** over time.  
+- **Objective:** Survive as long as possible to rack up the highest score.
+
+---
 
 ## Key Features
 
-1. **Procedural Tunnel Generation:**  
-   - A random or user-specified seed determines the tunnel layout.  
-   - Tunnel gradually narrows to increase difficulty over time.
-2. **Obstacle & Power-Up Placement:**  
-   - Obstacles are positioned along the tunnel and must be avoided.  
-   - Collectible power-ups offer temporary benefits like slow-motion, score boosts, or auto-firing capabilities.
-3. **Ghost Run System:**  
-   - The game records your run (position/timing).  
-   - When replaying the same seed, see a "ghost" of your previous best run.
-4. **One-Tap Vertical Control & Sensor-Based Steering:**  
-   - Tap/Click provides an upward impulse.  
-   - Tilt or mouse movement controls horizontal movement.
-5. **Scoring & Progress Tracking:**  
-   - Base score from distance traveled.  
-   - Bonus points from destroying obstacles and collecting power-ups.  
-   - High scores are recorded locally for each seed.
+1. **Procedural Tunnel Generation**  
+   - Each run is unique, shaped by a random **seed** that you can set or randomize.  
+   - The tunnel **narrows** progressively, increasing the challenge.
+2. **Obstacle & Power-Up Placement**  
+   - **Bright, visible obstacles** threaten your path — avoid them at all costs.  
+   - **Power-ups** like Slow-Mo, Score Boost, and Auto-Fire give you temporary advantages.
+3. **Ghost Run System**  
+   - The game **records your movements**, storing them locally.  
+   - Replay the same seed to race against your own **ghost** and beat your previous record.
+4. **Simple, Intuitive Controls**  
+   - **Tap/Click** for upward impulse.  
+   - **Tilt** or **mouse movement** to steer left and right.
+5. **Scoring & Progress**  
+   - Earn **distance-based** points; collect **bonuses** for power-ups and destroyed obstacles.  
+   - High scores are stored locally by seed — challenge yourself or friends!
+
+---
 
 ## How to Play
 
-1. **Open `index.html` in a Browser:**  
-   - No additional server setup is needed.  
-   - Requires an internet connection for Babylon.js and Cannon.js CDN dependencies (unless downloaded and referenced locally).
-2. **Seed Selection:**  
-   - On first load or refresh without a seed, a random one is chosen.  
-   - You can specify your own seed by editing the URL parameter, e.g. `?seed=1234`.
-3. **Controls:**
+1. **Open `index.html` in Your Browser**  
+   - No server needed; just an internet connection for Babylon.js & Cannon.js (CDN).
+2. **Choose or Set a Seed**  
+   - By default, a **random seed** is generated.  
+   - Or append `?seed=1234` (for example) to the URL to replay or share a specific layout.
+3. **Controls**  
    - **Desktop:**  
-     - Click to jump (upward impulse).  
-     - Move mouse left/right to steer horizontally.  
+     - **Click** for an upward jump.  
+     - **Move the mouse** left/right to steer horizontally.  
    - **Mobile:**  
-     - Tap to jump.  
-     - Tilt your device left/right for horizontal control.
-4. **Goal:**  
-   - Avoid obstacles.  
+     - **Tap** to jump.  
+     - **Tilt** left/right to steer horizontally.
+4. **Objective**  
    - Stay within the tunnel walls.  
-   - Collect power-ups to maximize your score.  
-   - Your run ends when you collide with an obstacle or leave the tunnel.
+   - Collect power-ups.  
+   - Avoid obstacles at all costs.  
+   - Colliding or leaving the tunnel ends the run.
+
+---
 
 ## Ghost Runs
 
-- Your position is recorded on every frame.  
-- After a run finishes (game over), the run data (including final score) is saved in `localStorage`.  
-- If you replay the same seed, a semi-transparent "ghost" appears, replicating your best run’s path.
+- Automatically **recorded** each time you play.  
+- Saved in `localStorage` under a unique key tied to the **seed**.  
+- Replay the **same seed** to watch a semi-transparent ghost representing your best performance.
+
+---
 
 ## Modifying the Code
 
-- **Babylon.js & Cannon.js Dependencies:**  
-  - Loaded via CDN in the `<head>` of the HTML file.  
 - **Game Settings:**  
-  - Tunable constants such as `FORWARD_SPEED`, `UP_IMPULSE`, `SLOW_MO_DURATION`, etc., can be modified in the `<script>` section of `index.html`.
+  - Tweak constants (e.g., `FORWARD_SPEED`, `UP_IMPULSE`, `SLOW_MO_DURATION`) in the `<script>` section.  
+- **Dependencies:**  
+  - Babylon.js & Cannon.js are **CDN-based** in the HTML `<head>`.  
+  - You can switch to local references if you prefer offline usage.
 - **Seed Logic:**  
-  - Implemented with a simple linear congruential generator (LCG) for reproducible random values.
+  - Uses a simple **linear congruential generator (LCG)** for deterministic placement of obstacles and power-ups.
+
+---
 
 ## Local Data
 
-- **Where Runs Are Stored:**  
-  - The player’s ghost data is saved using `localStorage`.  
-  - This data is keyed by `ghostPositions_<seed>` for each unique seed.
-- **Clearing Data:**  
-  - You can clear your browser’s local storage to remove ghost data and high scores for fresh starts.
+- **Storage:**  
+  - Ghost run data is kept in your **browser’s `localStorage`** under keys like `ghostPositions_<seed>`.  
+- **Resetting:**  
+  - Clear your browser’s local storage to remove old runs and high scores.
+
+---
 
 ## Contributing
 
 - **Issues & Feature Requests:**  
-  - Use GitHub’s Issue Tracker to submit bug reports or suggestions.
+  - Report them on the project’s GitHub **Issue Tracker**.  
 - **Pull Requests:**  
-  - Fork the repository, make changes, and open a PR explaining your enhancements.
+  - Fork this repo, commit improvements, and open a PR with details on what you changed.
+
+---
+
+Enjoy your flight through the ever-narrowing 3D cave, and don’t forget to **share your seed** so others can challenge your high score!
