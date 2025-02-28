@@ -202,6 +202,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     const canvas = document.getElementById("renderCanvas");
     const engine = new BABYLON.Engine(canvas, true);
     let scene;
+    let camera; // We'll store the camera here so we can reference it anywhere
 
     // Parse seed from URL if present, otherwise use a random seed
     function getSeedFromURL() {
@@ -224,10 +225,10 @@ There are three types of time-limited power-ups, with durations that accumulate 
     let ghostIndex = 0;            // track frames for replay
 
     // Game settings & tunable variables.
-    const GRAVITY = -7;                  // downward gravity (constant)
-    const UP_IMPULSE = 9;               // upward impulse on tap/click
-    const FORWARD_SPEED = 20;              // forward speed along the tunnel
-    const HORIZONTAL_SENSITIVITY = 0.01;   // for tilt or mouse-based movement
+    const GRAVITY = -20;                  // downward gravity (constant)
+    const UP_IMPULSE = 5;               // upward impulse on tap/click
+    const FORWARD_SPEED = 20;           // forward speed along the tunnel
+    const HORIZONTAL_SENSITIVITY = 0.01;   
     const INITIAL_TUNNEL_RADIUS = 40;      
     const NARROWING_RATE = 0.5;           
     const MIN_TUNNEL_RADIUS = 7;          
@@ -318,7 +319,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
     // Utility: Return the 2D center for a given Z (integer steps). We clamp to the array bounds.
     function getCenterAtZ(z) {
-      // Convert z to an index in pathCenters. Each step is STEP_SIZE=5.
+      // Convert z to an index in pathCenters. Each step is STEP_SIZE.
       let idx = Math.floor(z / STEP_SIZE);
       if (idx < 0) idx = 0;
       if (idx >= pathCenters.length) idx = pathCenters.length - 1;
@@ -354,8 +355,13 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // 4) Create power-ups
       generatePowerUps();
 
-      // Create a first-person camera, parented to the player mesh.
-      let camera = new BABYLON.UniversalCamera("camera", new BABYLON.Vector3(0,0,0), scene);
+      // Use a DeviceOrientationCamera on mobile to rotate the camera based on phone movement.
+      // On desktop (non-mobile), fall back to a UniversalCamera.
+      if (/Mobi|Android/i.test(navigator.userAgent)) {
+        camera = new BABYLON.DeviceOrientationCamera("camera", new BABYLON.Vector3(0,0,0), scene);
+      } else {
+        camera = new BABYLON.UniversalCamera("camera", new BABYLON.Vector3(0,0,0), scene);
+      }
       camera.attachControl(canvas, true);
       camera.parent = playerMesh;
       camera.position.z = 0;
@@ -378,8 +384,6 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // We'll track a 2D "center" (x,y) that shifts slightly each step, while z increments.
       // Force the tunnel to start at (0,0).
       let currentCenter = new BABYLON.Vector2(0, 0);
-
-      // We'll have a small 2D direction for changes.
       let dir = new BABYLON.Vector2(seededRandom() - 0.5, seededRandom() - 0.5);
       dir.normalize();
 
@@ -412,7 +416,6 @@ There are three types of time-limited power-ups, with durations that accumulate 
           let radius = baseRadius + localOffset;
           let x = currentCenter.x + Math.cos(angle) * radius;
           let y = currentCenter.y + Math.sin(angle) * radius;
-
           crossSection.push(new BABYLON.Vector3(x, y, z));
         }
 
@@ -447,7 +450,6 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // Start at (0,0,0), which should now be inside the very first cross-section of the tunnel.
       playerMesh.position = new BABYLON.Vector3(0, 0, 0);
 
-      // Dynamic physics body
       playerMesh.physicsImpostor = new BABYLON.PhysicsImpostor(
         playerMesh,
         BABYLON.PhysicsImpostor.SphereImpostor,
@@ -478,7 +480,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     function generateObstacles() {
       // Single material for obstacles
       let obstacleMaterial = new BABYLON.StandardMaterial("obsMat", scene);
-      obstacleMaterial.diffuseColor = new BABYLON.Color3(1, 0, 0); // Red color
+      obstacleMaterial.diffuseColor = new BABYLON.Color3(1, 0, 0); // Red
 
       // Start obstacles further in, so the first ones appear at z=30 onward.
       for (let z = 30; z < TUNNEL_LENGTH; z += OBSTACLE_INTERVAL) {
@@ -660,9 +662,19 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
     // ==== Input Handling ====
     function setupInputHandlers() {
-      // On pointer down => upward impulse
+      // On pointer down => upward impulse (for mobile and PC)
       canvas.addEventListener("pointerdown", () => {
         if (!gameRunning) return;
+
+        // iOS needs permission request for device orientation.
+        // We'll attempt it on first touch/click if available.
+        if (typeof DeviceOrientationEvent !== "undefined" &&
+            typeof DeviceOrientationEvent.requestPermission === "function") {
+          DeviceOrientationEvent.requestPermission().catch(() => {
+            // Ignore or log error if user denies; game will still run but won't get orientation data.
+          });
+        }
+
         let currentVel = playerMesh.physicsImpostor.getLinearVelocity();
         currentVel.y = UP_IMPULSE;
         playerMesh.physicsImpostor.setLinearVelocity(currentVel);
