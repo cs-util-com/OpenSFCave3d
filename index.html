@@ -224,20 +224,20 @@ There are three types of time-limited power-ups, with durations that accumulate 
     let ghostIndex = 0;            // track frames for replay
 
     // Game settings & tunable variables.
-    const GRAVITY = -1.5;                  // downward gravity (constant)
-    const UP_IMPULSE = 1.5;               // upward impulse on tap/click
-    const FORWARD_SPEED = 30;             // forward speed along the tunnel
+    const GRAVITY = -10.5;                  // downward gravity (constant)
+    const UP_IMPULSE = 0.01;               // upward impulse on tap/click
+    const FORWARD_SPEED = 20;             // forward speed along the tunnel
     const HORIZONTAL_SENSITIVITY = 0.01;  // for tilt or mouse-based movement
-    const INITIAL_TUNNEL_RADIUS = 10;     
+    const INITIAL_TUNNEL_RADIUS = 40;     
     const NARROWING_RATE = 0.5;           
-    const MIN_TUNNEL_RADIUS = 4;          
+    const MIN_TUNNEL_RADIUS = 10;          
     const OBSTACLE_INTERVAL = 10;         
-    const OBSTACLE_SIZE = 0.7;
+    const OBSTACLE_SIZE = 2;
     const TUNNEL_LENGTH = 10000; 
 
     // Power-Up settings
     const POWERUP_INTERVAL = 50;     
-    const POWERUP_SIZE = 0.5;
+    const POWERUP_SIZE = 1;
     const POWERUP_BONUS_POINTS = 50; 
 
     // Durations (in seconds) for each power-up
@@ -296,6 +296,10 @@ There are three types of time-limited power-ups, with durations that accumulate 
       return seed / 233280;
     }
 
+    // We'll store the tunnel's center path for each "step" in Z,
+    // so we can place obstacles/power-ups around the actual curve.
+    let pathCenters = [];  // array of BABYLON.Vector2 indicating the center x,y for each discrete Z step
+
     // ==== Scene Setup ====
     function createScene() {
       scene = new BABYLON.Scene(engine);
@@ -313,7 +317,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // Basic light
       let light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
 
-      // 1) Create the cave-like tunnel
+      // 1) Create the cave-like tunnel with random slopes in x/y, but ensure the start is at (0,0).
       createAsymmetricCave();
 
       // 2) Create the player
@@ -340,27 +344,54 @@ There are three types of time-limited power-ups, with durations that accumulate 
       return scene;
     }
 
-    // ==== Create an Asymmetric Cave Using a Ribbon ====
+    // ==== Create an Asymmetric Cave with the first cross-section at (0,0) ====
     function createAsymmetricCave() {
       const pathArray = [];
-      const stepSize = 5;
+      const stepSize = 5; // distance between "rings"
       const steps = TUNNEL_LENGTH / stepSize;
       const crossSectionPointsCount = 16; 
 
+      // We'll track a 2D "center" (x,y) that shifts slightly each step, while z increments.
+      // Force the tunnel to start at (0,0).
+      let currentCenter = new BABYLON.Vector2(0, 0);
+
+      // We'll have a small 2D direction for changes.
+      let dir = new BABYLON.Vector2(seededRandom() - 0.5, seededRandom() - 0.5);
+      dir.normalize();
+
       for (let i = 0; i <= steps; i++) {
         let z = i * stepSize;
-        let baseRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
-        let crossSection = [];
 
-        // Build a ring of points
+        // For i>0, update the direction and shift the center. For i=0, it stays at (0,0).
+        if (i > 0) {
+          dir.x += (seededRandom() - 0.5) * 0.2;
+          dir.y += (seededRandom() - 0.5) * 0.2;
+          dir.normalize();
+
+          // Move the center by some small step in x,y.
+          let moveDist = 2.5; // how fast the center moves horizontally/vertically each step
+          currentCenter = currentCenter.add(dir.scale(moveDist));
+        }
+
+        // Store the center so we can place obstacles/power-ups around it later.
+        pathCenters[i] = currentCenter.clone();
+
+        // Determine radius for this cross-section (narrowing effect)
+        let baseRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
+
+        // Build a ring of points around currentCenter.x, currentCenter.y
+        let crossSection = [];
         for (let t = 0; t < crossSectionPointsCount; t++) {
           let angle = (t / crossSectionPointsCount) * 2 * Math.PI;
-          let offset = (seededRandom() - 0.5) * 3.0;
-          let radius = baseRadius + offset;
-          let x = Math.cos(angle) * radius;
-          let y = Math.sin(angle) * radius;
+          // Slight random offset to make the tunnel less uniform.
+          let localOffset = (seededRandom() - 0.5) * 3.0;
+          let radius = baseRadius + localOffset;
+          let x = currentCenter.x + Math.cos(angle) * radius;
+          let y = currentCenter.y + Math.sin(angle) * radius;
+
           crossSection.push(new BABYLON.Vector3(x, y, z));
         }
+
         pathArray.push(crossSection);
       }
 
@@ -377,7 +408,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       tunnel.material.diffuseColor = new BABYLON.Color3(0.36, 0.24, 0.18);
       tunnel.material.specularColor = new BABYLON.Color3(0, 0, 0);
 
-      // Physics impostor
+      // Physics impostor for the tunnel mesh.
       tunnel.physicsImpostor = new BABYLON.PhysicsImpostor(
         tunnel,
         BABYLON.PhysicsImpostor.MeshImpostor,
@@ -389,6 +420,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     // ==== Create Player ====
     function createPlayer() {
       playerMesh = BABYLON.MeshBuilder.CreateSphere("playerMesh", { diameter: 0.5 }, scene);
+      // Start at (0,0,0), which should now be inside the very first cross-section of the tunnel.
       playerMesh.position = new BABYLON.Vector3(0, 0, 0);
 
       // Dynamic physics body
@@ -399,8 +431,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
         scene
       );
 
-      // Initial forward velocity
-      // We'll keep setting forward velocity in the update loop; just set once here for start.
+      // Initial forward velocity along Z
       playerMesh.physicsImpostor.setLinearVelocity(new BABYLON.Vector3(0, 0, FORWARD_SPEED));
 
       // Player material
@@ -419,19 +450,32 @@ There are three types of time-limited power-ups, with durations that accumulate 
       );
     }
 
+    // Utility: Return the 2D center for a given Z (integer steps). We clamp to the array bounds.
+    function getCenterAtZ(z) {
+      // Convert z to an index in pathCenters. Each step is stepSize=5.
+      let idx = Math.floor(z / 5);
+      if (idx < 0) idx = 0;
+      if (idx >= pathCenters.length) idx = pathCenters.length - 1;
+      return pathCenters[idx];
+    }
+
     // ==== Obstacle Generation ====
     function generateObstacles() {
-      // Create a single material for obstacles
+      // Single material for obstacles
       let obstacleMaterial = new BABYLON.StandardMaterial("obsMat", scene);
       obstacleMaterial.diffuseColor = new BABYLON.Color3(1, 0, 0); // Red color
 
-      // Start obstacles further in, so the first ones appear later
+      // Start obstacles further in, so the first ones appear at z=30 onward.
       for (let z = 30; z < TUNNEL_LENGTH; z += OBSTACLE_INTERVAL) {
+        let center2D = getCenterAtZ(z);
+        // Calculate tunnel radius at this z to clamp how far obstacles can be placed.
         let tunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
+
+        // Place the obstacle at some random angle around the center2D, within that radius.
         let angle = seededRandom() * Math.PI * 2;
         let radius = seededRandom() * (tunnelRadius - OBSTACLE_SIZE - 0.5);
-        let x = Math.cos(angle) * radius;
-        let y = Math.sin(angle) * radius;
+        let x = center2D.x + Math.cos(angle) * radius;
+        let y = center2D.y + Math.sin(angle) * radius;
 
         // Create the obstacle as a red sphere
         let obstacleMesh = BABYLON.MeshBuilder.CreateSphere("obstacle" + z, { diameter: OBSTACLE_SIZE }, scene);
@@ -470,16 +514,18 @@ There are three types of time-limited power-ups, with durations that accumulate 
       let autoFireMat = new BABYLON.StandardMaterial("autoFireMat", scene);
       autoFireMat.diffuseColor = new BABYLON.Color3(0.6, 0, 1); // purple
 
+      // Place power-ups at intervals in the tunnel.
       for (let z = POWERUP_INTERVAL; z < TUNNEL_LENGTH; z += POWERUP_INTERVAL) {
-        // We'll randomly decide whether to spawn a power-up
+        // We'll randomly decide whether to spawn a power-up at this interval.
         if (seededRandom() < 0.3) {
+          let center2D = getCenterAtZ(z);
           let tunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
           let angle = seededRandom() * Math.PI * 2;
           let radius = seededRandom() * (tunnelRadius - POWERUP_SIZE - 0.5);
-          let x = Math.cos(angle) * radius;
-          let y = Math.sin(angle) * radius;
+          let x = center2D.x + Math.cos(angle) * radius;
+          let y = center2D.y + Math.sin(angle) * radius;
 
-          // Randomly pick one of the three types
+          // Randomly pick one of the three power-up types
           let types = ["slowMo", "scoreBoost", "autoFire"];
           let pickIndex = Math.floor(seededRandom() * types.length);
           let chosenType = types[pickIndex];
@@ -506,7 +552,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
           // Collision => collect power-up (no game over)
           playerMesh.physicsImpostor.registerOnPhysicsCollide(
             powerUpMesh.physicsImpostor,
-            function(main, collided) {
+            function() {
               if (gameRunning && powerUpMesh.isVisible) {
                 collectPowerUp(powerUpMesh.metadata.type, powerUpMesh);
               }
@@ -586,7 +632,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
       // Collision with obstacles => destroy them and remove projectile
       obstacles.forEach(obs => {
-        proj.physicsImpostor.registerOnPhysicsCollide(obs.physicsImpostor, function(main, collided) {
+        proj.physicsImpostor.registerOnPhysicsCollide(obs.physicsImpostor, function() {
           if (obs.isVisible && proj.isVisible) {
             obstaclesDestroyed++;
             score += 25; // bonus points
@@ -616,6 +662,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
           if (e.gamma !== null) {
             let tilt = BABYLON.Scalar.Clamp(e.gamma / 45, -1, 1);
             let currentVel = playerMesh.physicsImpostor.getLinearVelocity();
+            // Just adjust X velocity for tilt (simple approach)
             currentVel.x += tilt * HORIZONTAL_SENSITIVITY * 1.5;
             playerMesh.physicsImpostor.setLinearVelocity(currentVel);
           }
@@ -641,18 +688,20 @@ There are three types of time-limited power-ups, with durations that accumulate 
         scene.getPhysicsEngine().setTimeStep(baseTimeStep);
       }
 
-      // Maintain forward velocity but let gravity & vertical velocity remain from physics.
+      // Instead of always pushing forward on the global Z axis, 
+      // move the player in the direction the camera is looking (for proper steering).
       let oldVel = playerMesh.physicsImpostor.getLinearVelocity();
       let forward = scene.activeCamera.getDirection(BABYLON.Vector3.Forward());
       forward.normalize();
       let newVel = new BABYLON.Vector3(
         forward.x * FORWARD_SPEED,
-        oldVel.y,
+        oldVel.y, // keep vertical velocity for gravity/up-impulse
         forward.z * FORWARD_SPEED
       );
       playerMesh.physicsImpostor.setLinearVelocity(newVel);
 
-      // Distance-based scoring
+      // Distance-based scoring (based on z-position or overall movement)
+      // We'll just keep using the actual player's z-position for scoring.
       let currentZ = playerMesh.position.z;
       if (currentZ > lastZ) {
         let dist = (currentZ - lastZ);
