@@ -224,16 +224,17 @@ There are three types of time-limited power-ups, with durations that accumulate 
     let ghostIndex = 0;            // track frames for replay
 
     // Game settings & tunable variables.
-    const GRAVITY = -10.5;                  // downward gravity (constant)
-    const UP_IMPULSE = 0.01;               // upward impulse on tap/click
-    const FORWARD_SPEED = 20;             // forward speed along the tunnel
-    const HORIZONTAL_SENSITIVITY = 0.01;  // for tilt or mouse-based movement
-    const INITIAL_TUNNEL_RADIUS = 40;     
+    const GRAVITY = -7;                  // downward gravity (constant)
+    const UP_IMPULSE = 9;               // upward impulse on tap/click
+    const FORWARD_SPEED = 20;              // forward speed along the tunnel
+    const HORIZONTAL_SENSITIVITY = 0.01;   // for tilt or mouse-based movement
+    const INITIAL_TUNNEL_RADIUS = 40;      
     const NARROWING_RATE = 0.5;           
-    const MIN_TUNNEL_RADIUS = 10;          
+    const MIN_TUNNEL_RADIUS = 7;          
     const OBSTACLE_INTERVAL = 10;         
-    const OBSTACLE_SIZE = 2;
+    const OBSTACLE_SIZE = 1.5;
     const TUNNEL_LENGTH = 10000; 
+    const STEP_SIZE = 7; // distance between cross-section "rings"
 
     // Power-Up settings
     const POWERUP_INTERVAL = 50;     
@@ -300,6 +301,30 @@ There are three types of time-limited power-ups, with durations that accumulate 
     // so we can place obstacles/power-ups around the actual curve.
     let pathCenters = [];  // array of BABYLON.Vector2 indicating the center x,y for each discrete Z step
 
+    // Utility for returning the clamped tunnel radius at a given z
+    function getTunnelRadiusAtZ(z) {
+      return Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
+    }
+
+    // Utility to get a random position (x,y) around center2D within maxRadius
+    function getRandomPositionAroundCenter(center2D, maxRadius) {
+      let angle = seededRandom() * Math.PI * 2;
+      let r = seededRandom() * maxRadius;
+      return {
+        x: center2D.x + Math.cos(angle) * r,
+        y: center2D.y + Math.sin(angle) * r
+      };
+    }
+
+    // Utility: Return the 2D center for a given Z (integer steps). We clamp to the array bounds.
+    function getCenterAtZ(z) {
+      // Convert z to an index in pathCenters. Each step is STEP_SIZE=5.
+      let idx = Math.floor(z / STEP_SIZE);
+      if (idx < 0) idx = 0;
+      if (idx >= pathCenters.length) idx = pathCenters.length - 1;
+      return pathCenters[idx];
+    }
+
     // ==== Scene Setup ====
     function createScene() {
       scene = new BABYLON.Scene(engine);
@@ -347,8 +372,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     // ==== Create an Asymmetric Cave with the first cross-section at (0,0) ====
     function createAsymmetricCave() {
       const pathArray = [];
-      const stepSize = 5; // distance between "rings"
-      const steps = TUNNEL_LENGTH / stepSize;
+      const steps = TUNNEL_LENGTH / STEP_SIZE;
       const crossSectionPointsCount = 16; 
 
       // We'll track a 2D "center" (x,y) that shifts slightly each step, while z increments.
@@ -360,7 +384,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       dir.normalize();
 
       for (let i = 0; i <= steps; i++) {
-        let z = i * stepSize;
+        let z = i * STEP_SIZE;
 
         // For i>0, update the direction and shift the center. For i=0, it stays at (0,0).
         if (i > 0) {
@@ -377,7 +401,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
         pathCenters[i] = currentCenter.clone();
 
         // Determine radius for this cross-section (narrowing effect)
-        let baseRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
+        let baseRadius = getTunnelRadiusAtZ(z);
 
         // Build a ring of points around currentCenter.x, currentCenter.y
         let crossSection = [];
@@ -442,21 +466,12 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // If player collides with tunnel => game over
       playerMesh.physicsImpostor.registerOnPhysicsCollide(
         tunnel.physicsImpostor,
-        function() {
+        () => {
           if (gameRunning) {
             gameOver();
           }
         }
       );
-    }
-
-    // Utility: Return the 2D center for a given Z (integer steps). We clamp to the array bounds.
-    function getCenterAtZ(z) {
-      // Convert z to an index in pathCenters. Each step is stepSize=5.
-      let idx = Math.floor(z / 5);
-      if (idx < 0) idx = 0;
-      if (idx >= pathCenters.length) idx = pathCenters.length - 1;
-      return pathCenters[idx];
     }
 
     // ==== Obstacle Generation ====
@@ -469,13 +484,12 @@ There are three types of time-limited power-ups, with durations that accumulate 
       for (let z = 30; z < TUNNEL_LENGTH; z += OBSTACLE_INTERVAL) {
         let center2D = getCenterAtZ(z);
         // Calculate tunnel radius at this z to clamp how far obstacles can be placed.
-        let tunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
+        let tunnelRadius = getTunnelRadiusAtZ(z);
 
         // Place the obstacle at some random angle around the center2D, within that radius.
-        let angle = seededRandom() * Math.PI * 2;
-        let radius = seededRandom() * (tunnelRadius - OBSTACLE_SIZE - 0.5);
-        let x = center2D.x + Math.cos(angle) * radius;
-        let y = center2D.y + Math.sin(angle) * radius;
+        let randomPos = getRandomPositionAroundCenter(center2D, tunnelRadius - OBSTACLE_SIZE - 0.5);
+        let x = randomPos.x;
+        let y = randomPos.y;
 
         // Create the obstacle as a red sphere
         let obstacleMesh = BABYLON.MeshBuilder.CreateSphere("obstacle" + z, { diameter: OBSTACLE_SIZE }, scene);
@@ -493,7 +507,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
         // Collision => game over (if from player). We'll also handle projectile collision separately.
         playerMesh.physicsImpostor.registerOnPhysicsCollide(
           obstacleMesh.physicsImpostor,
-          function() {
+          () => {
             if (gameRunning) {
               gameOver();
             }
@@ -519,11 +533,10 @@ There are three types of time-limited power-ups, with durations that accumulate 
         // We'll randomly decide whether to spawn a power-up at this interval.
         if (seededRandom() < 0.3) {
           let center2D = getCenterAtZ(z);
-          let tunnelRadius = Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
-          let angle = seededRandom() * Math.PI * 2;
-          let radius = seededRandom() * (tunnelRadius - POWERUP_SIZE - 0.5);
-          let x = center2D.x + Math.cos(angle) * radius;
-          let y = center2D.y + Math.sin(angle) * radius;
+          let tunnelRadius = getTunnelRadiusAtZ(z);
+          let randomPos = getRandomPositionAroundCenter(center2D, tunnelRadius - POWERUP_SIZE - 0.5);
+          let x = randomPos.x;
+          let y = randomPos.y;
 
           // Randomly pick one of the three power-up types
           let types = ["slowMo", "scoreBoost", "autoFire"];
@@ -552,7 +565,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
           // Collision => collect power-up (no game over)
           playerMesh.physicsImpostor.registerOnPhysicsCollide(
             powerUpMesh.physicsImpostor,
-            function() {
+            () => {
               if (gameRunning && powerUpMesh.isVisible) {
                 collectPowerUp(powerUpMesh.metadata.type, powerUpMesh);
               }
@@ -632,7 +645,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
       // Collision with obstacles => destroy them and remove projectile
       obstacles.forEach(obs => {
-        proj.physicsImpostor.registerOnPhysicsCollide(obs.physicsImpostor, function() {
+        proj.physicsImpostor.registerOnPhysicsCollide(obs.physicsImpostor, () => {
           if (obs.isVisible && proj.isVisible) {
             obstaclesDestroyed++;
             score += 25; // bonus points
@@ -648,7 +661,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     // ==== Input Handling ====
     function setupInputHandlers() {
       // On pointer down => upward impulse
-      canvas.addEventListener("pointerdown", function() {
+      canvas.addEventListener("pointerdown", () => {
         if (!gameRunning) return;
         let currentVel = playerMesh.physicsImpostor.getLinearVelocity();
         currentVel.y = UP_IMPULSE;
@@ -657,7 +670,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
       // Sensor-based input on mobile (left/right tilt)
       if (window.DeviceOrientationEvent) {
-        window.addEventListener("deviceorientation", function(e) {
+        window.addEventListener("deviceorientation", (e) => {
           if (!gameRunning) return;
           if (e.gamma !== null) {
             let tilt = BABYLON.Scalar.Clamp(e.gamma / 45, -1, 1);
@@ -883,14 +896,14 @@ There are three types of time-limited power-ups, with durations that accumulate 
     scene = createScene();
     scene.registerBeforeRender(updateGame);
 
-    engine.runRenderLoop(function() {
+    engine.runRenderLoop(() => {
       if (scene) {
         scene.render();
       }
     });
 
     // Handle resizing
-    window.addEventListener("resize", function() {
+    window.addEventListener("resize", () => {
       engine.resize();
     });
 
@@ -898,12 +911,12 @@ There are three types of time-limited power-ups, with durations that accumulate 
     seedInput.value = seed;
 
     // Restart button => reload
-    restartBtn.addEventListener("click", function() {
+    restartBtn.addEventListener("click", () => {
       location.reload();
     });
 
     // Set new seed button
-    setSeedBtn.addEventListener("click", function() {
+    setSeedBtn.addEventListener("click", () => {
       let newSeed = parseInt(seedInput.value);
       if (!isNaN(newSeed)) {
         window.location.href = window.location.pathname + "?seed=" + newSeed;
@@ -911,7 +924,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     });
 
     // Share button => uses the native share functionality (if available)
-    shareBtn.addEventListener("click", function() {
+    shareBtn.addEventListener("click", () => {
       if (navigator.share) {
         navigator.share({
           title: "Open 3D SFCave",
