@@ -226,11 +226,11 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
     // Game settings & tunable variables.
     const GRAVITY = -20;                  // downward gravity (constant)
-    const UP_IMPULSE = 5;               // upward impulse on tap/click
-    const FORWARD_SPEED = 20;           // forward speed along the tunnel
+    const UP_IMPULSE = 5;                // upward impulse on tap/click
+    const FORWARD_SPEED = 20;            // forward speed along the tunnel
     const HORIZONTAL_SENSITIVITY = 0.01;   
     const INITIAL_TUNNEL_RADIUS = 40;      
-    const NARROWING_RATE = 0.5;           
+    const NARROWING_RATE = 0.6;           
     const MIN_TUNNEL_RADIUS = 7;          
     const OBSTACLE_INTERVAL = 10;         
     const OBSTACLE_SIZE = 1.5;
@@ -761,12 +761,10 @@ There are three types of time-limited power-ups, with durations that accumulate 
         return true;
       });
 
-      // Update ghost replay if present
-      if (ghostMesh && storedGhostPositions.length > 0) {
-        if (ghostIndex < storedGhostPositions.length) {
-          ghostMesh.position.copyFrom(storedGhostPositions[ghostIndex]);
-          ghostIndex++;
-        }
+      // Update ghost replay if present: move one stored position per frame
+      if (ghostMesh && storedGhostPositions.length > 0 && ghostIndex < storedGhostPositions.length) {
+        ghostMesh.position.copyFrom(storedGhostPositions[ghostIndex]);
+        ghostIndex++;
       }
 
       // Record ghost position (for future replay)
@@ -837,8 +835,8 @@ There are three types of time-limited power-ups, with durations that accumulate 
         if (runPositions && runPositions.length > 0) {
           storedGhostPositions = runPositions.slice(); // copy
 
-          // Skip the first ~30 frames so the ghost starts visibly ahead
-          let framesToSkip = 30;
+          // Skip the first frames so the ghost starts visibly ahead
+          let framesToSkip = 60;
           if (storedGhostPositions.length > framesToSkip) {
             storedGhostPositions.splice(0, framesToSkip);
           }
