@@ -723,7 +723,9 @@ There are three types of time-limited power-ups, with durations that accumulate 
       }
       scoreDisplay.innerText = "Score: " + Math.floor(score);
 
-      // Check out of bounds (end of tunnel)
+      // === Manual check for tunnel boundary collision (to ensure we don't slip through) ===
+      checkTunnelBoundary();
+
       if (playerMesh.position.z > TUNNEL_LENGTH) {
         gameOver();
       }
@@ -757,6 +759,26 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
       // Record ghost position (for future replay)
       ghostPositions.push(playerMesh.position.clone());
+    }
+
+    // ==== Ensure player stays within tunnel ====
+    // This extra check helps avoid situations where the player slips through the mesh.
+    function checkTunnelBoundary() {
+      let zPos = playerMesh.position.z;
+      let center2D = getCenterAtZ(zPos);
+      let dx = playerMesh.position.x - center2D.x;
+      let dy = playerMesh.position.y - center2D.y;
+      let dist = Math.sqrt(dx*dx + dy*dy);
+      let radius = getTunnelRadiusAtZ(zPos);
+
+      // Player's sphere radius is 0.25 (half of 0.5 diameter)
+      let playerRadius = 0.25;
+
+      if (dist + playerRadius > radius) {
+        if (gameRunning) {
+          gameOver();
+        }
+      }
     }
 
     // ==== Update Power-Up Timers ====
