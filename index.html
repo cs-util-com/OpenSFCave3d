@@ -229,9 +229,8 @@ There are three types of time-limited power-ups, with durations that accumulate 
     const UP_IMPULSE = 11;                // upward impulse on tap/click
     const FORWARD_SPEED = 20;            // forward speed along the tunnel
     const HORIZONTAL_SENSITIVITY = 0.01;   
-    const INITIAL_TUNNEL_RADIUS = 40;      
-    const NARROWING_RATE = 0.6;           
-    const MIN_TUNNEL_RADIUS = 7;          
+    const INITIAL_TUNNEL_RADIUS = 10;      
+    const MIN_TUNNEL_RADIUS = 4;          
     const OBSTACLE_INTERVAL = 10;         
     const OBSTACLE_SIZE = 1.5;
     const TUNNEL_LENGTH = 10000; 
@@ -303,14 +302,15 @@ There are three types of time-limited power-ups, with durations that accumulate 
     let pathCenters = [];  // array of BABYLON.Vector2 indicating the center x,y for each discrete Z step
 
     // Utility for returning the clamped tunnel radius at a given z
-    // Also ensures the tunnel doesn't narrow too quickly in the very beginning.
+    // Now uses an exponential/curved formula and removes the if-else logic.
     function getTunnelRadiusAtZ(z) {
-      // For the first 30 units, don't narrow at all:
-      if (z < 100) {
-        return INITIAL_TUNNEL_RADIUS;
-      }
-      // After 30, normal narrowing:
-            return Math.max(INITIAL_TUNNEL_RADIUS - z * NARROWING_RATE, MIN_TUNNEL_RADIUS);
+      // Exponential approach:
+      // The tunnel radius transitions from INITIAL_TUNNEL_RADIUS at z=0
+      // asymptotically toward MIN_TUNNEL_RADIUS as z increases.
+      // Adjust the factor below to control how quickly it narrows.
+      const factor = 0.0005;
+      let radius = MIN_TUNNEL_RADIUS + (INITIAL_TUNNEL_RADIUS - MIN_TUNNEL_RADIUS) * Math.exp(-factor * z);
+      return radius;
     }
 
     // Utility to get a random position (x,y) around center2D within maxRadius
