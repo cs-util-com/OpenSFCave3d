@@ -219,10 +219,14 @@ There are three types of time-limited power-ups, with durations that accumulate 
     let seed = getSeedFromURL(); // Displayed seed
 
     // We'll store ghost runs in localStorage. If a ghost run exists for the same seed, we'll show it.
-    let ghostPositions = [];       // for current run recording
-    let storedGhostPositions = []; // replay data if available
+    // Instead of recording every frame (which can be huge and cause QuotaExceededError),
+    // we record fewer positions to keep storage smaller.
+    let ghostPositions = [];       // for current run recording (compressed to arrays)
+    let storedGhostPositions = []; // replay data if available (also arrays)
     let ghostMesh = null;          // a sphere for the ghost
     let ghostIndex = 0;            // track frames for replay
+    let ghostRecordFrameSkip = 3;  // only record every N frames to reduce storage usage
+    let ghostFrameCounter = 0;     // counter to decide when to record
 
     // Game settings & tunable variables.
     const GRAVITY = -16;                  // downward gravity (constant)
@@ -773,14 +777,24 @@ There are three types of time-limited power-ups, with durations that accumulate 
         return true;
       });
 
-      // Update ghost replay if present: move one stored position per frame
-      if (ghostMesh && storedGhostPositions.length > 0 && ghostIndex < storedGhostPositions.length) {
-        ghostMesh.position.copyFrom(storedGhostPositions[ghostIndex]);
+      // Update ghost replay
+      if (ghostMesh && storedGhostPositions.length > 0 ) {
+        let i = Math.floor(ghostIndex / ghostRecordFrameSkip);
+        if (i < storedGhostPositions.length) {
+          let posArray = storedGhostPositions[i];
+          ghostMesh.position.x = posArray[0];
+          ghostMesh.position.y = posArray[1];
+          ghostMesh.position.z = posArray[2];
+        }
         ghostIndex++;
       }
 
-      // Record ghost position (for future replay)
-      ghostPositions.push(playerMesh.position.clone());
+      // Record ghost position less frequently to avoid huge storage usage
+      ghostFrameCounter++;
+      if (ghostFrameCounter % ghostRecordFrameSkip === 0) {
+        // Store as an array of [x,y,z] to reduce size
+        ghostPositions.push([playerMesh.position.x, playerMesh.position.y, playerMesh.position.z]);
+      }
     }
 
     // ==== Ensure player stays within tunnel ====
@@ -849,8 +863,8 @@ There are three types of time-limited power-ups, with durations that accumulate 
         if (runPositions && runPositions.length > 0) {
           storedGhostPositions = runPositions.slice(); // copy
 
-          // Skip the first frames so the ghost starts visibly ahead
-          let framesToSkip = 60;
+          // Skip some frames at the start so the ghost starts visibly ahead (optional)
+          let framesToSkip = 60/ghostRecordFrameSkip;
           if (storedGhostPositions.length > framesToSkip) {
             storedGhostPositions.splice(0, framesToSkip);
           }
@@ -894,15 +908,28 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
             // Now store the new run if this run's final score is higher than the old run's final score.
             if (score > oldScore) {
-              localStorage.setItem("ghostPositions_" + seed, JSON.stringify(newRunData));
+              try {
+                localStorage.setItem("ghostPositions_" + seed, JSON.stringify(newRunData));
+              } catch (error) {
+                // If we fail due to quota, we simply won't store the new run.
+                console.warn("Failed to store new ghost run (quota exceeded).");
+              }
             }
           } else {
-            // If parsing failed or something else, just store new data
-            localStorage.setItem("ghostPositions_" + seed, JSON.stringify(newRunData));
+            // If old data parsing failed, just store new data if possible
+            try {
+              localStorage.setItem("ghostPositions_" + seed, JSON.stringify(newRunData));
+            } catch (error) {
+              console.warn("Failed to store new ghost run (quota exceeded).");
+            }
           }
         } else {
-          // No old data for this seed
-          localStorage.setItem("ghostPositions_" + seed, JSON.stringify(newRunData));
+          // No old data, store new data if possible
+          try {
+            localStorage.setItem("ghostPositions_" + seed, JSON.stringify(newRunData));
+          } catch (error) {
+            console.warn("Failed to store new ghost run (quota exceeded).");
+          }
         }
       }
     }
