@@ -103,7 +103,7 @@
   6. Always respond with the full new html file (including these comments here), additional explanations are not necessary. 
   -->
 
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -960,6 +960,8 @@
 
     // Set the current seed in the input field for easy viewing/editing
     seedInput.value = seed;
+    // Ensure the displayed value matches what's currently in the URL parameter (including leading zeros if any)
+    seedInput.value = new URLSearchParams(window.location.search).get("seed") || seedInput.value;
 
     // Restart button => reload
     restartBtn.addEventListener("click", () => {
