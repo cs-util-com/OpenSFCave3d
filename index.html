@@ -1,107 +1,107 @@
-<!-- (Do NOT remove this entire comment block at the top of the HTML file!)
+  <!-- (Do NOT remove this entire comment block at the top of the HTML file!)
 
-### **1. Game Overview**
+  ### **1. Game Overview**
 
-* **Concept:** A 3D take on the classic sfcave game.  
-* **Perspective:** First-person view, with the plane represented as a single dot (hitbox).  
-* **Core Challenge:** Navigate a procedurally generated tunnel that narrows over time while avoiding obstacles.
+  * **Concept:** A 3D take on the classic sfcave game.  
+  * **Perspective:** First-person view, with the plane represented as a single dot (hitbox).  
+  * **Core Challenge:** Navigate a procedurally generated tunnel that narrows over time while avoiding obstacles.
 
----
+  ---
 
-### **2. Core Gameplay Mechanics**
+  ### **2. Core Gameplay Mechanics**
 
-* **Movement:**  
-  * **Vertical Control:** A tap (on mobile) or mouse click (on PC) provides an upward impulse. Gravity continuously pulls the dot downward.  
-  * **Horizontal Control:** Sensor-based input on mobile (via tilt) and mouse movement on PC allow the player to steer left and right.  
-* **Collision & Life:**  
-  * The player has 1HP. Colliding with any obstacle or leaving the tunnel results in an immediate game over.
+  * **Movement:**  
+    * **Vertical Control:** A tap (on mobile) or mouse click (on PC) provides an upward impulse. Gravity continuously pulls the dot downward.  
+    * **Horizontal Control:** Sensor-based input on mobile (via tilt) and mouse movement on PC allow the player to steer left and right.  
+  * **Collision & Life:**  
+    * The player has 1HP. Colliding with any obstacle or leaving the tunnel results in an immediate game over.
 
----
+  ---
 
-### **3. Tunnel and Obstacles**
+  ### **3. Tunnel and Obstacles**
 
-* **Tunnel:**  
-  * **Procedural Generation:** Levels are generated based on a seed. The seed is displayed to the player for sharing and replay purposes.  
-  * **Dynamic Difficulty:** As the player progresses, the tunnel gradually narrows, increasing the challenge.  
-* **Obstacles:**  
-  * Static and brightly colored obstacles are positioned throughout the tunnel.  
-  * They are meant to be easily recognizable hazards that the player must avoid.  
-  * Obstacle density remains constant regardless of tunnel narrowing.
+  * **Tunnel:**  
+    * **Procedural Generation:** Levels are generated based on a seed. The seed is displayed to the player for sharing and replay purposes.  
+    * **Dynamic Difficulty:** As the player progresses, the tunnel gradually narrows, increasing the challenge.  
+  * **Obstacles:**  
+    * Static and brightly colored obstacles are positioned throughout the tunnel.  
+    * They are meant to be easily recognizable hazards that the player must avoid.  
+    * Obstacle density remains constant regardless of tunnel narrowing.
 
----
+  ---
 
-### **4. Collectible Power-Ups**
+  ### **4. Collectible Power-Ups**
 
-There are three types of time-limited power-ups, with durations that accumulate if the same type is collected while an effect is already active:
+  There are three types of time-limited power-ups, with durations that accumulate if the same type is collected while an effect is already active:
 
-* **Slow-Motion Effect:**  
-  * Temporarily slows down time (affecting overall gameplay speed).  
-* **Score Boost:**  
-  * Increases bonus points received (e.g., multiplier for distance or actions) while active.  
-* **Auto-Firing Weapon:**  
-  * **Behavior:** Automatically fires projectiles every 1 second.  
-  * **Direction:** Projectiles are shot in the direction the dot is currently steering (incorporating both vertical and horizontal movement).  
-  * **Impact:** When a projectile hits an obstacle, the obstacle is immediately destroyed and bonus points are awarded.
+  * **Slow-Motion Effect:**  
+    * Temporarily slows down time (affecting overall gameplay speed).  
+  * **Score Boost:**  
+    * Increases bonus points received (e.g., multiplier for distance or actions) while active.  
+  * **Auto-Firing Weapon:**  
+    * **Behavior:** Automatically fires projectiles every 1 second.  
+    * **Direction:** Projectiles are shot in the direction the dot is currently steering (incorporating both vertical and horizontal movement).  
+    * **Impact:** When a projectile hits an obstacle, the obstacle is immediately destroyed and bonus points are awarded.
 
----
+  ---
 
-### **5. Ghost Player Functionality**
+  ### **5. Ghost Player Functionality**
 
-* **Purpose:** Motivates players to compete against their own previous best runs.  
-* **Recording:** Only the player’s movement (position and timing) is recorded.  
-* **Usage:** Ghost runs are available when playing with the same seed.
+  * **Purpose:** Motivates players to compete against their own previous best runs.  
+  * **Recording:** Only the player’s movement (position and timing) is recorded.  
+  * **Usage:** Ghost runs are available when playing with the same seed.
 
----
+  ---
 
-### **6. Level Seed Management**
+  ### **6. Level Seed Management**
 
-* **Visibility:** The seed is displayed on-screen, allowing players to copy and share it.  
-* **Usage:** Players can either reuse a seed to challenge their previous ghost runs or change the seed to generate a new level layout.
+  * **Visibility:** The seed is displayed on-screen, allowing players to copy and share it.  
+  * **Usage:** Players can either reuse a seed to challenge their previous ghost runs or change the seed to generate a new level layout.
 
----
+  ---
 
-### **7. Scoring System**
+  ### **7. Scoring System**
 
-* **Base Score:** Continuously accumulates based on the distance traveled.  
-* **Bonuses:**  
-  * Additional bonus points are awarded for every obstacle destroyed by the auto-firing weapon.  
-  * Additional bonus points are given for each power-up collected.  
-* **Tuning:** Specific bonus values are tunable and can be adjusted during playtesting.
+  * **Base Score:** Continuously accumulates based on the distance traveled.  
+  * **Bonuses:**  
+    * Additional bonus points are awarded for every obstacle destroyed by the auto-firing weapon.  
+    * Additional bonus points are given for each power-up collected.  
+  * **Tuning:** Specific bonus values are tunable and can be adjusted during playtesting.
 
----
+  ---
 
-### **8. Game Over and Feedback**
+  ### **8. Game Over and Feedback**
 
-* **Trigger:** The game ends immediately when the player's dot collides with an obstacle or exits the tunnel.  
-* **Game Over Screen:** Upon game termination, display the following final statistics:  
-  * Final Score  
-  * Distance Traveled  
-  * Number of Obstacles Destroyed  
-  * Number of Power-Ups Collected  
-  * The Seed used for that run  
-* **Feedback:** Appropriate visual and audio cues (e.g., sound effects or screen shake) may be included to enhance the impact of game over.
+  * **Trigger:** The game ends immediately when the player's dot collides with an obstacle or exits the tunnel.  
+  * **Game Over Screen:** Upon game termination, display the following final statistics:  
+    * Final Score  
+    * Distance Traveled  
+    * Number of Obstacles Destroyed  
+    * Number of Power-Ups Collected  
+    * The Seed used for that run  
+  * **Feedback:** Appropriate visual and audio cues (e.g., sound effects or screen shake) may be included to enhance the impact of game over.
 
----
+  ---
 
-### **9. Control Methods for Different Platforms**
+  ### **9. Control Methods for Different Platforms**
 
-* **Mobile:**  
-  * **Steering:** Left/right via sensor-based tilt.  
-  * **Vertical Movement:** Tap for upward impulse.  
-* **PC (Testing):**  
-  * **Steering:** Mouse movement or keyboard (if desired) for left/right.  
-  * **Vertical Movement:** Mouse click for upward impulse.
+  * **Mobile:**  
+    * **Steering:** Left/right via sensor-based tilt.  
+    * **Vertical Movement:** Tap for upward impulse.  
+  * **PC (Testing):**  
+    * **Steering:** Mouse movement or keyboard (if desired) for left/right.  
+    * **Vertical Movement:** Mouse click for upward impulse.
 
 
-## General Instructions (Do not remove!)
+  ## General Instructions (Do not remove!)
 
-1. Keep this comment block in the code! Also do not remove any comments in the code below.
-2. If any text is displayed, the font should be CONSOLAS, monospace.
-3. There is no backend; all data needs to be stored locally.
-4. Simplify the code if possible (without removing comments or the functionality described above).
-5. You MUST keep all comments in the code below, even if you think they are redundant.
-6. Always respond with the full new html file (including these comments here), additional explanations are not necessary. 
--->
+  1. Keep this comment block in the code! Also do not remove any comments in the code below.
+  2. If any text is displayed, the font should be CONSOLAS, monospace.
+  3. There is no backend; all data needs to be stored locally.
+  4. Simplify the code if possible (without removing comments or the functionality described above).
+  5. You MUST keep all comments in the code below, even if you think they are redundant.
+  6. Always respond with the full new html file (including these comments here), additional explanations are not necessary. 
+  -->
 
 <!DOCTYPE html>
 <html lang="en">
@@ -302,7 +302,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     let pathCenters = [];  // array of BABYLON.Vector2 indicating the center x,y for each discrete Z step
 
     // Utility for returning the clamped tunnel radius at a given z
-    // Now uses an exponential/curved formula and removes the if-else logic.
+    // Uses an exponential/curved formula and removes the if-else logic.
     function getTunnelRadiusAtZ(z) {
       // Exponential approach:
       // The tunnel radius transitions from INITIAL_TUNNEL_RADIUS at z=0
@@ -361,14 +361,28 @@ There are three types of time-limited power-ups, with durations that accumulate 
       // 4) Create power-ups
       generatePowerUps();
 
-      // Use a DeviceOrientationCamera on mobile to rotate the camera based on phone movement.
-      // On desktop (non-mobile), fall back to a UniversalCamera.
+      // On mobile, use DeviceOrientationCamera; on desktop, use UniversalCamera
       if (/Mobi|Android/i.test(navigator.userAgent)) {
         camera = new BABYLON.DeviceOrientationCamera("camera", new BABYLON.Vector3(0,0,0), scene);
+        camera.attachControl(canvas, true);
+
+        // === Calibrate initial device orientation so that the phone's starting angle is "forward" ===
+        let initialCalibrationDone = false;
+        camera.onAfterCheckInputsObservable.add(() => {
+          if (!initialCalibrationDone) {
+            initialCalibrationDone = true;
+            // We'll zero out the pitch (x) and roll (z) at the very start
+            let initRotX = camera.rotation.x;
+            let initRotZ = camera.rotation.z;
+            camera.rotation.x -= initRotX;
+            camera.rotation.z -= initRotZ;
+          }
+        });
       } else {
         camera = new BABYLON.UniversalCamera("camera", new BABYLON.Vector3(0,0,0), scene);
+        camera.attachControl(canvas, true);
       }
-      camera.attachControl(canvas, true);
+
       camera.parent = playerMesh;
       camera.position.z = 0;
 
@@ -732,7 +746,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
       playerMesh.physicsImpostor.setLinearVelocity(newVel);
 
       // Distance-based scoring (based on z-position or overall movement)
-      // We'll just keep using the actual player's z-position for scoring.
+      // We'll use the actual player's z-position for scoring.
       let currentZ = playerMesh.position.z;
       if (currentZ > lastZ) {
         let dist = (currentZ - lastZ);
@@ -778,7 +792,6 @@ There are three types of time-limited power-ups, with durations that accumulate 
     }
 
     // ==== Ensure player stays within tunnel ====
-    // This extra check helps avoid situations where the player slips through the mesh.
     function checkTunnelBoundary() {
       let zPos = playerMesh.position.z;
       let center2D = getCenterAtZ(zPos);
