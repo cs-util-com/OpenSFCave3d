@@ -168,9 +168,6 @@ There are three types of time-limited power-ups, with durations that accumulate 
       100% { opacity: 0; }
     }
   </style>
-  <!-- Include Babylon.js and Cannon.js (for physics) from CDN -->
-  <script src="https://cdn.babylonjs.com/babylon.js"></script>
-  <script src="https://cdn.babylonjs.com/cannon.js"></script>
 </head>
 <body>
   <canvas id="renderCanvas"></canvas>
@@ -197,7 +194,12 @@ There are three types of time-limited power-ups, with durations that accumulate 
     <button id="shareBtn">Share</button>
   </div>
 
+  <!-- Include Babylon.js and Cannon.js (for physics) from CDN -->
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/cannon.js"></script>
   <script>
+    "use strict";
+
     // ==== Global Variables ====
     const canvas = document.getElementById("renderCanvas");
     const engine = new BABYLON.Engine(canvas, true);
@@ -232,8 +234,8 @@ There are three types of time-limited power-ups, with durations that accumulate 
     const GRAVITY = -16;                  // downward gravity (constant)
     const UP_IMPULSE = 11;                // upward impulse on tap/click
     const FORWARD_SPEED = 20;             // forward speed along the tunnel
-    const HORIZONTAL_SENSITIVITY = 0.01;   
-    const INITIAL_TUNNEL_RADIUS = 10;      
+    const HORIZONTAL_SENSITIVITY = 0.01;  
+    const INITIAL_TUNNEL_RADIUS = 10;     
     const MIN_TUNNEL_RADIUS = 4;          
     const OBSTACLE_INTERVAL = 10;         
     const OBSTACLE_SIZE = 1.5;
@@ -306,7 +308,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     let pathCenters = [];  // array of BABYLON.Vector2 indicating the center x,y for each discrete Z step
 
     // Utility for returning the clamped tunnel radius at a given z
-    // Uses an exponential/curved formula and removes the if-else logic.
+    // Uses an exponential/curved formula.
     function getTunnelRadiusAtZ(z) {
       // Exponential approach:
       // The tunnel radius transitions from INITIAL_TUNNEL_RADIUS at z=0
@@ -338,6 +340,30 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
     // We keep a reference for the base time step to adjust for slow-mo on each frame.
     let baseTimeStep = 1/60;
+
+    // ==== Local Storage Helpers (added for code simplification, keeping comments) ====
+    // We'll keep all relevant code comments in place.
+
+    // Helper function to safely get data from localStorage
+    function getLocalData(key) {
+      let data = localStorage.getItem(key);
+      if (!data) return null;
+      try {
+        return JSON.parse(data);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // Helper function to safely set data in localStorage
+    function setLocalData(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (error) {
+        // If we fail due to quota, we simply won't store the new data.
+        console.warn("Failed to store data (quota exceeded).");
+      }
+    }
 
     // ==== Scene Setup ====
     function createScene() {
@@ -847,19 +873,9 @@ There are three types of time-limited power-ups, with durations that accumulate 
     // ==== Ghost Run Initialization ====
     function initGhostRun() {
       // See if there's stored ghost data for this seed
-      let savedData = localStorage.getItem("ghostPositions_" + seed);
+      let savedData = getLocalData("ghostPositions_" + seed);
       if (savedData) {
-        let parseData;
-        try {
-          parseData = JSON.parse(savedData);
-        } catch (e) {
-          parseData = null;
-        }
-        if (!parseData) return;
-
-        // If old format was just an array, use that. Otherwise, use positions.
-        let runPositions = Array.isArray(parseData) ? parseData : parseData.positions;
-
+        let runPositions = Array.isArray(savedData) ? savedData : savedData.positions;
         if (runPositions && runPositions.length > 0) {
           storedGhostPositions = runPositions.slice(); // copy
 
@@ -890,46 +906,20 @@ There are three types of time-limited power-ups, with durations that accumulate 
           finalScore: score
         };
 
-        let oldData = localStorage.getItem("ghostPositions_" + seed);
+        let oldData = getLocalData("ghostPositions_" + seed);
         if (oldData) {
-          let oldRun;
-          try {
-            oldRun = JSON.parse(oldData);
-          } catch (e) {
-            oldRun = null;
+          let oldScore = 0;
+          // If old format is just an array, there's no oldScore to compare; treat that as 0.
+          if (!Array.isArray(oldData)) {
+            oldScore = oldData.finalScore || 0;
           }
-
-          if (oldRun) {
-            // If old format is just an array, there's no oldScore to compare; treat that as 0.
-            let oldScore = 0;
-            if (!Array.isArray(oldRun)) {
-              oldScore = oldRun.finalScore || 0;
-            }
-
-            // Now store the new run if this run's final score is higher than the old run's final score.
-            if (score > oldScore) {
-              try {
-                localStorage.setItem("ghostPositions_" + seed, JSON.stringify(newRunData));
-              } catch (error) {
-                // If we fail due to quota, we simply won't store the new run.
-                console.warn("Failed to store new ghost run (quota exceeded).");
-              }
-            }
-          } else {
-            // If old data parsing failed, just store new data if possible
-            try {
-              localStorage.setItem("ghostPositions_" + seed, JSON.stringify(newRunData));
-            } catch (error) {
-              console.warn("Failed to store new ghost run (quota exceeded).");
-            }
+          // Now store the new run if this run's final score is higher than the old run's final score.
+          if (score > oldScore) {
+            setLocalData("ghostPositions_" + seed, newRunData);
           }
         } else {
           // No old data, store new data if possible
-          try {
-            localStorage.setItem("ghostPositions_" + seed, JSON.stringify(newRunData));
-          } catch (error) {
-            console.warn("Failed to store new ghost run (quota exceeded).");
-          }
+          setLocalData("ghostPositions_" + seed, newRunData);
         }
       }
     }
@@ -944,13 +934,13 @@ There are three types of time-limited power-ups, with durations that accumulate 
 
       // Check if there's a best score for this seed to display next to the final score
       let bestScorePart = "";
-      let oldData = localStorage.getItem("ghostPositions_" + seed);
+      let oldData = getLocalData("ghostPositions_" + seed);
       if (oldData) {
         let oldRun = null;
-        try {
-          oldRun = JSON.parse(oldData);
-        } catch (e) {}
-        if (oldRun && !Array.isArray(oldRun) && oldRun.finalScore) {
+        if (!Array.isArray(oldData)) {
+          oldRun = oldData;
+        }
+        if (oldRun && oldRun.finalScore) {
           bestScorePart = ` (vs Best Run: ${Math.floor(oldRun.finalScore)})`;
         }
       }
