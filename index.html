@@ -954,9 +954,7 @@ There are three types of time-limited power-ups, with durations that accumulate 
     });
 
     // Set the current seed in the input field for easy viewing/editing
-    seedInput.value = seed;
-    // Ensure the displayed value matches what's currently in the URL parameter (including leading zeros if any)
-    seedInput.value = new URLSearchParams(window.location.search).get("seed") || seedInput.value;
+    seedInput.value = new URLSearchParams(window.location.search).get("seed") || seed;
 
     // Restart button => reload
     restartBtn.addEventListener("click", () => {
