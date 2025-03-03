@@ -398,15 +398,16 @@ There are three types of time-limited power-ups, with durations that accumulate 
         camera = new BABYLON.DeviceOrientationCamera("camera", new BABYLON.Vector3(0,0,0), scene);
         camera.attachControl(canvas, true);
 
-        // === Calibrate initial device orientation so that the phone's starting angle is "forward" ===
+        // === Calibrate initial device orientation (zero out pitch, roll, and yaw) ===
         let initialCalibrationDone = false;
         camera.onAfterCheckInputsObservable.add(() => {
           if (!initialCalibrationDone) {
             initialCalibrationDone = true;
-            // We'll zero out the pitch (x) and roll (z) at the very start
             let initRotX = camera.rotation.x;
+            let initRotY = camera.rotation.y;
             let initRotZ = camera.rotation.z;
             camera.rotation.x -= initRotX;
+            camera.rotation.y -= initRotY;
             camera.rotation.z -= initRotZ;
           }
         });
